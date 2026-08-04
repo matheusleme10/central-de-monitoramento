@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-typecheck-build-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: central
+          POSTGRES_PASSWORD: central
+          POSTGRES_DB: central_monitoramento
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U central -d central_monitoramento"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://central:central@localhost:5432/central_monitoramento?schema=public"
+      AUTH_SECRET: "ci-only-secret-not-used-in-production"
+      AUTH_URL: "http://localhost:3000"
+      NODE_ENV: "test"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar client do Prisma
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes automatizados
+        run: npm run test
+
+      - name: Aplicar migrações no banco de CI
+        run: npx prisma migrate deploy
+
+      - name: Build
+        run: npm run build
