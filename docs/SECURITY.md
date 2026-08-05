@@ -71,8 +71,8 @@ ocorrências de SQL "raw" seriam essas, e não há nenhuma).
 - Tokens de API (`api_tokens`): gerados uma única vez, armazenados como
   **hash SHA-256** (nunca texto puro); listagem mostra apenas
   `token_preview` (últimos 4 caracteres).
-- Segredos de ambiente (`AUTH_SECRET`, `AUTH_GOOGLE_SECRET`,
-  `DATABASE_URL`) apenas via variáveis de ambiente (`src/lib/env.ts`
+- Segredos de ambiente (`AUTH_SECRET`, `DATABASE_URL`) apenas via
+  variáveis de ambiente (`src/lib/env.ts`
   valida com Zod na inicialização); `.env.example` nunca contém valores
   reais.
 - Logs de auditoria (`audit_logs`) nunca incluem senha, token em texto

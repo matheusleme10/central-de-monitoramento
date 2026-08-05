@@ -1,3 +1,6 @@
+// `tsx` (diferente do CLI do Prisma) não carrega `.env` sozinho — sem isso,
+// DATABASE_URL e as variáveis SEED_SUPERADMIN_* não chegam ao processo.
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import argon2 from "argon2";
 import { ROLES, type RoleKey } from "../src/lib/constants/roles";
@@ -82,14 +85,18 @@ async function main() {
   const superadminPassword = process.env.SEED_SUPERADMIN_PASSWORD;
 
   if (superadminEmail && superadminPassword) {
-    console.log(`Criando usuário Superadmin (${superadminEmail})...`);
+    console.log(`Criando/atualizando usuário Superadmin (${superadminEmail})...`);
     const passwordHash = await argon2.hash(superadminPassword, {
       type: argon2.argon2id,
     });
 
+    // `update` também grava a senha (e reativa a conta) de propósito: rodar
+    // o seed de novo com SEED_SUPERADMIN_EMAIL/PASSWORD é o mecanismo
+    // suportado de "esqueci minha senha" para o Superadmin, já que não há
+    // fluxo de recuperação por e-mail nesta versão.
     await prisma.user.upsert({
       where: { email: superadminEmail },
-      update: {},
+      update: { passwordHash, isActive: true, deletedAt: null },
       create: {
         name: "Administrador",
         email: superadminEmail,

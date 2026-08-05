@@ -1,5 +1,4 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { z } from "zod";
@@ -37,10 +36,6 @@ export const authConfig: NextAuthConfig = {
     error: "/login",
   },
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
     Credentials({
       name: "credentials",
       credentials: {
@@ -90,19 +85,6 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      // Login via Google: só permite se já existir um usuário convidado
-      // com este e-mail (sem cadastro público).
-      if (account?.provider === "google") {
-        const existing = await prisma.user.findUnique({
-          where: { email: user.email ?? "" },
-        });
-        if (!existing || existing.deletedAt || !existing.isActive) {
-          return false;
-        }
-      }
-      return true;
-    },
     async jwt({ token, user }) {
       if (user?.email) {
         const dbUser = await prisma.user.findUnique({

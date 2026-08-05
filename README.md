@@ -14,7 +14,7 @@ Este README documenta as 6 fases do projeto: **1 (Infraestrutura)**,
 - Next.js 15 (App Router) + React 19 + TypeScript (strict)
 - Tailwind CSS v4 + shadcn/ui (componentes copiados em `src/components/ui`) + Lucide React
 - PostgreSQL + Prisma ORM
-- Auth.js v5 (Google OAuth + Credenciais com Argon2)
+- Auth.js v5 (Credenciais + Argon2)
 - React Hook Form + Zod
 - Recharts (gráficos do Dashboard) + `cmdk` (paleta de pesquisa global Ctrl+K) + React Flow (mapa/grafo)
 - Back-end exclusivamente via Route Handlers do Next.js (sem Express/NestJS/FastAPI)
@@ -38,7 +38,7 @@ src/
 │   │   ├── users/[id]
 │   │   ├── roles/[id]/permissions, permissions/
 │   │   └── updates/                     # POST autenticado por API Token (Apps Script)
-│   ├── login/                        # Tela de login (Google + credenciais)
+│   ├── login/                        # Tela de login (e-mail + senha)
 │   └── api/auth/[...nextauth]/          # Route Handler do Auth.js
 ├── components/
 │   ├── ui/                           # Primitivos shadcn/ui (button, card, dialog, select, ...)
@@ -93,15 +93,20 @@ acontece apenas na camada de apresentação (`src/lib/timezone.ts`).
 
 Auth.js v5, com:
 
-- **Google OAuth** e **Credenciais** (e-mail + senha, hash Argon2id).
+- **Credenciais** (e-mail + senha, hash Argon2id) — único método de login;
+  não há OAuth/Google configurado nesta versão.
 - Sessão em **JWT** (obrigatório com Credentials provider), cookies
   HttpOnly, Secure em produção, SameSite=lax — padrão do Auth.js, não
   sobrescrito.
 - **CSRF** protegido nativamente pelas rotas internas do Auth.js.
-- **Sem cadastro público**: login por credenciais só funciona para
-  usuários já existentes (criados via seed ou, futuramente, por um
-  administrador). Login Google também exige que o e-mail já exista na
-  base.
+- **Sem cadastro público**: login só funciona para usuários já existentes
+  (criados via seed ou por um administrador em `/usuarios`).
+- **Troca da própria senha**: qualquer usuário autenticado pode trocar sua
+  senha em `/perfil` (`PATCH /api/v1/me/password`), informando a senha
+  atual. Um admin editando outra conta em `/usuarios` não precisa da senha
+  atual dela. Recuperação de senha do Superadmin (sem acesso ao painel) é
+  feita rodando o seed de novo com `SEED_SUPERADMIN_EMAIL`/
+  `SEED_SUPERADMIN_PASSWORD` — ver seção "Como rodar localmente".
 - O middleware (`src/middleware.ts`) roda no Edge Runtime e por isso **não**
   importa a configuração completa do Auth.js (que depende de Argon2 e do
   Prisma Client, incompatíveis com Edge) — ele apenas confere a presença do
@@ -374,7 +379,6 @@ Ver `.env.example`. Nenhum segredo tem valor real commitado.
 | `DATABASE_URL` | Connection string do PostgreSQL |
 | `AUTH_SECRET` | Segredo do Auth.js (gerar com `openssl rand -base64 33`) |
 | `AUTH_URL` | URL base da aplicação |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Credenciais OAuth do Google Cloud Console |
 | `NODE_ENV` | `development` \| `production` \| `test` |
 | `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD` | Usados apenas por `npm run prisma:seed` para criar o primeiro Superadmin |
 
@@ -390,7 +394,7 @@ automaticamente (cookie/localStorage gerenciados pelo `next-themes`).
 
 ```bash
 npm install
-cp .env.example .env   # preencher DATABASE_URL, AUTH_SECRET, credenciais Google
+cp .env.example .env   # preencher DATABASE_URL e AUTH_SECRET
 
 npx prisma generate
 npx prisma migrate dev --name init
@@ -426,7 +430,7 @@ restrito a `registry.npmjs.org` (sem acesso a `binaries.prisma.sh` nem a
 ## Status
 
 **Fase 1 — Infraestrutura: concluída.** Next.js 15 + TypeScript strict +
-Tailwind v4, schema Prisma completo, Auth.js (Google + credenciais, JWT,
+Tailwind v4, schema Prisma completo, Auth.js (Credenciais, JWT,
 CSRF, sem cadastro público), RBAC server-side, middleware de proteção de
 rotas, layout com sidebar/header, temas Dark/Light persistentes, seed
 inicial.

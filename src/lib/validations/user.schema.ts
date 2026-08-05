@@ -26,5 +26,22 @@ export const updateUserSchema = z.object({
   password: z.string().min(8).max(72).optional(),
 });
 
+// Usado pela tela self-service "/perfil" — troca da própria senha,
+// diferente de `updateUserSchema` (usado por um admin para editar outra
+// pessoa, sem exigir a senha atual).
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Informe a senha atual"),
+    newPassword: z
+      .string()
+      .min(8, "A nova senha deve ter ao menos 8 caracteres")
+      .max(72, "A nova senha deve ter no máximo 72 caracteres"),
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: "A nova senha deve ser diferente da atual",
+    path: ["newPassword"],
+  });
+
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

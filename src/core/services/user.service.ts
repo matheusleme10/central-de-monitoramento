@@ -1,7 +1,11 @@
 import "server-only";
 import { prisma } from "@/infrastructure/database/prisma";
-import { hashPassword } from "@/infrastructure/auth/password";
-import type { CreateUserInput, UpdateUserInput } from "@/lib/validations/user.schema";
+import { hashPassword, verifyPassword } from "@/infrastructure/auth/password";
+import type {
+  ChangePasswordInput,
+  CreateUserInput,
+  UpdateUserInput,
+} from "@/lib/validations/user.schema";
 
 const SELECT_SAFE_FIELDS = {
   id: true,
@@ -63,6 +67,34 @@ export async function updateUser(userId: string, input: UpdateUserInput) {
     data,
     select: SELECT_SAFE_FIELDS,
   });
+}
+
+/**
+ * Troca de senha self-service (a própria pessoa logada, não um admin
+ * editando outra conta — esse fluxo é `updateUser`). Retorna `false` se a
+ * senha atual não confere, sem lançar exceção — evita vazar detalhes
+ * internos e deixa o Route Handler decidir o status HTTP (400).
+ */
+export async function changeOwnPassword(
+  userId: string,
+  input: ChangePasswordInput,
+): Promise<boolean> {
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: { passwordHash: true },
+  });
+
+  if (!user?.passwordHash) return false;
+
+  const isCurrentPasswordValid = await verifyPassword(
+    user.passwordHash,
+    input.currentPassword,
+  );
+  if (!isCurrentPasswordValid) return false;
+
+  const passwordHash = await hashPassword(input.newPassword);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  return true;
 }
 
 export async function softDeleteUser(userId: string) {

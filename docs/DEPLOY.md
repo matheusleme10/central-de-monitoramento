@@ -30,9 +30,7 @@ com `openssl rand -base64 33` e nunca reutilize o valor de desenvolvimento.
 | `DATABASE_URL`         | sim         | string de conexão PostgreSQL                     |
 | `AUTH_SECRET`          | sim         | segredo de assinatura de sessão do Auth.js        |
 | `AUTH_URL`              | sim         | URL pública da aplicação (ex.: `https://...`)     |
-| `AUTH_GOOGLE_ID`       | opcional    | necessária apenas se o login Google for usado     |
-| `AUTH_GOOGLE_SECRET`   | opcional    | idem                                              |
-| `SEED_SUPERADMIN_EMAIL`/`SEED_SUPERADMIN_PASSWORD` | opcional | usadas só por `npm run prisma:seed`, nunca em runtime |
+| `SEED_SUPERADMIN_EMAIL`/`SEED_SUPERADMIN_PASSWORD` | opcional | usadas só por `npm run prisma:seed`, nunca em runtime — reaproveitadas também para resetar a senha do Superadmin (ver abaixo) |
 
 ## Opção 0 — Vercel (recomendado para este projeto)
 
@@ -63,9 +61,9 @@ generate"` do `package.json` já cuida disso automaticamente.
    - `AUTH_SECRET` — gerar com `openssl rand -base64 33`
    - `AUTH_URL` — a URL pública do projeto na Vercel (ex.:
      `https://seu-projeto.vercel.app`)
-   - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — se for usar login Google,
-     lembre de adicionar `https://seu-projeto.vercel.app/api/auth/callback/google`
-     como URI de redirecionamento autorizada no Google Cloud Console
+
+   Login é só e-mail/senha (Credentials) — não há OAuth/Google configurado
+   nesta versão, então não há URI de redirecionamento pra cadastrar.
 5. **Deploy** — a Vercel roda `npm install` (dispara `postinstall` →
    `prisma generate`) e depois `next build` automaticamente. Não é
    preciso configurar Build Command customizado.
@@ -83,7 +81,7 @@ necessários para o fluxo acima.
 
 ```bash
 cp .env.example .env
-# preencha AUTH_SECRET e, se for usar login Google, AUTH_GOOGLE_ID/SECRET
+# preencha AUTH_SECRET
 
 docker compose up --build
 ```
