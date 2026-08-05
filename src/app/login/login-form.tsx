@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const loginSchema = z.object({
-  email: z.string().email("Informe um e-mail válido"),
   password: z.string().min(1, "Informe a senha"),
 });
 
@@ -41,7 +40,7 @@ export function LoginForm() {
     });
 
     if (result?.error) {
-      setServerError("E-mail ou senha inválidos.");
+      setServerError("Senha inválida.");
       return;
     }
 
@@ -52,25 +51,12 @@ export function LoginForm() {
     <div className="space-y-6">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="voce@empresa.com"
-            {...register("email")}
-          />
-          {errors.email && (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="password">Senha</Label>
           <Input
             id="password"
             type="password"
             autoComplete="current-password"
+            autoFocus
             {...register("password")}
           />
           {errors.password && (
@@ -89,11 +75,6 @@ export function LoginForm() {
           Entrar
         </Button>
       </form>
-
-      <p className="text-center text-xs text-muted-foreground">
-        Não há cadastro público. O acesso é liberado apenas por convite de um
-        administrador.
-      </p>
     </div>
   );
 }

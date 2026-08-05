@@ -93,16 +93,25 @@ acontece apenas na camada de apresentação (`src/lib/timezone.ts`).
 
 Auth.js v5, com:
 
-- **Credenciais** (e-mail + senha, hash Argon2id) — único método de login;
-  não há OAuth/Google configurado nesta versão.
+- **Login por senha única** (a pedido do cliente): a tela `/login` só
+  pede a senha, sem e-mail nem seleção de conta. Por trás, a senha
+  digitada é testada (Argon2id) contra o hash da mesma conta "sistema" —
+  a primeira Superadmin ativa no banco — reaproveitando a infraestrutura
+  de hash/RBAC/auditoria já construída em vez de expor um segredo
+  separado em variável de ambiente. Isso significa que RBAC, papéis,
+  permissões e o restante das telas (`/usuarios`, `/permissoes`,
+  `/auditoria`) continuam funcionando por baixo — só o *login* ficou sem
+  conceito de conta visível. Ver comentário em
+  `src/infrastructure/auth/auth.config.ts` para como reverter para login
+  multiusuário se um dia for necessário.
 - Sessão em **JWT** (obrigatório com Credentials provider), cookies
   HttpOnly, Secure em produção, SameSite=lax — padrão do Auth.js, não
   sobrescrito.
 - **CSRF** protegido nativamente pelas rotas internas do Auth.js.
-- **Sem cadastro público**: login só funciona para usuários já existentes
-  (criados via seed ou por um administrador em `/usuarios`).
-- **Troca da própria senha**: qualquer usuário autenticado pode trocar sua
-  senha em `/perfil` (`PATCH /api/v1/me/password`), informando a senha
+- **Sem cadastro público**: a senha só é definida via seed ou pela tela
+  `/perfil` — não há tela de "criar conta".
+- **Troca da senha**: em `/perfil` (`PATCH /api/v1/me/password`),
+  informando a senha
   atual. Um admin editando outra conta em `/usuarios` não precisa da senha
   atual dela. Recuperação de senha do Superadmin (sem acesso ao painel) é
   feita rodando o seed de novo com `SEED_SUPERADMIN_EMAIL`/

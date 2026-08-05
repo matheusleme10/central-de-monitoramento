@@ -9,7 +9,6 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import type { RoleKey } from "@/lib/constants/roles";
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
   password: z.string().min(1),
 });
 
@@ -22,8 +21,18 @@ const credentialsSchema = z.object({
  *   Auth.js e não são sobrescritos aqui.
  * - CSRF é protegido nativamente pelas rotas internas do Auth.js
  *   (`/api/auth/csrf` + cookie de duplo envio).
- * - Não há cadastro público: o Credentials provider apenas autentica
- *   usuários já existentes, criados por um administrador.
+ * - **Login por senha única**: a pedido do cliente, não há mais tela
+ *   pedindo e-mail nem conceito de conta visível no login. Quem souber a
+ *   senha entra. Por trás dos panos, o login testa a senha contra o hash
+ *   da mesma conta "sistema" (a primeira Superadmin ativa no banco) —
+ *   reaproveita o Argon2 já existente em vez de um segredo separado em
+ *   variável de ambiente, então a senha continua trocável dentro do
+ *   próprio sistema em `/perfil` (sem precisar redeploy). Isso preserva
+ *   RBAC, auditoria e associação a projetos já construídos sem precisar
+ *   reescrever essas camadas. Se no futuro for necessário voltar a ter
+ *   múltiplas contas reais logando, é só restaurar o campo `email` aqui e
+ *   no formulário de login — a lógica de papéis/permissões nem precisa
+ *   mudar.
  */
 export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
@@ -39,47 +48,47 @@ export const authConfig: NextAuthConfig = {
     Credentials({
       name: "credentials",
       credentials: {
-        email: { label: "E-mail", type: "email" },
         password: { label: "Senha", type: "password" },
       },
       async authorize(rawCredentials, request) {
         const parsed = credentialsSchema.safeParse(rawCredentials);
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
+        const { password } = parsed.data;
 
-        // Proteção contra força bruta: 5 tentativas por minuto, por
-        // combinação IP + e-mail. Não diferencia "usuário não existe" de
-        // "senha errada" na resposta, evitando enumeração de contas.
+        // Proteção contra força bruta: 5 tentativas por minuto, por IP
+        // (não há mais e-mail para diferenciar tentativas).
         const ip = request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-        const rateLimit = checkRateLimit(`login:${ip}:${email}`, 5);
+        const rateLimit = checkRateLimit(`login:${ip}`, 5);
         if (!rateLimit.allowed) {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email },
+        // Não há seleção de conta no login: sempre resolve para a mesma
+        // conta "sistema" (primeira Superadmin ativa cadastrada) e testa a
+        // senha digitada contra o hash Argon2 dela.
+        const systemUser = await prisma.user.findFirst({
+          where: { role: { name: "SUPERADMIN" }, deletedAt: null, isActive: true },
+          orderBy: { createdAt: "asc" },
           include: { role: true },
         });
 
-        if (!user || !user.passwordHash || user.deletedAt || !user.isActive) {
-          return null;
-        }
+        if (!systemUser?.passwordHash) return null;
 
-        const isValid = await verifyPassword(user.passwordHash, password);
+        const isValid = await verifyPassword(systemUser.passwordHash, password);
         if (!isValid) return null;
 
         await prisma.user.update({
-          where: { id: user.id },
+          where: { id: systemUser.id },
           data: { lastLoginAt: new Date() },
         });
 
         return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image,
-          role: user.role.name as RoleKey,
+          id: systemUser.id,
+          name: systemUser.name,
+          email: systemUser.email,
+          image: systemUser.image,
+          role: systemUser.role.name as RoleKey,
         };
       },
     }),
