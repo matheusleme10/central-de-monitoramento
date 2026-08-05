@@ -2,19 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   AlertTriangle,
   Clock,
@@ -43,7 +31,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import type { DashboardIndicators, StatusDistributionItem, TimeseriesPoint, LiveAlert } from "@/core/services/dashboard.service";
+import type { DashboardIndicators, StatusDistributionItem, LiveAlert } from "@/core/services/dashboard.service";
 
 const STATUS_COLORS: Record<string, string> = {
   SUCCESS: "#22c55e",
@@ -84,26 +72,22 @@ const INDICATOR_CARDS: IndicatorCardConfig[] = [
 export function DashboardClient({
   indicators,
   distribution,
-  timeseries,
   alerts,
   projects,
   currentProjectId,
-  currentDays,
   userName,
 }: {
   indicators: DashboardIndicators;
   distribution: StatusDistributionItem[];
-  timeseries: TimeseriesPoint[];
   alerts: LiveAlert[];
   projects: Array<{ id: string; name: string }>;
   currentProjectId: string;
-  currentDays: number;
   userName: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  function updateFilter(key: "projectId" | "days", value: string) {
+  function updateFilter(key: "projectId", value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (!value || value === "ALL") {
       params.delete(key);
@@ -135,17 +119,6 @@ export function DashboardClient({
               ))}
             </SelectContent>
           </Select>
-
-          <Select value={String(currentDays)} onValueChange={(v) => updateFilter("days", v)}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Últimos 7 dias</SelectItem>
-              <SelectItem value="14">Últimos 14 dias</SelectItem>
-              <SelectItem value="30">Últimos 30 dias</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -170,43 +143,11 @@ export function DashboardClient({
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Execuções por dia</CardTitle>
-            <CardDescription>Distribuídas por status, últimos {currentDays} dias</CardDescription>
-          </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={timeseries}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" fontSize={12} stroke="hsl(var(--muted-foreground))" />
-                <YAxis allowDecimals={false} fontSize={12} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend
-                  formatter={(value) => STATUS_LABELS[value as string] ?? value}
-                  wrapperStyle={{ fontSize: 12 }}
-                />
-                <Bar dataKey="SUCCESS" stackId="a" fill={STATUS_COLORS.SUCCESS} name="SUCCESS" />
-                <Bar dataKey="ERROR" stackId="a" fill={STATUS_COLORS.ERROR} name="ERROR" />
-                <Bar dataKey="RUNNING" stackId="a" fill={STATUS_COLORS.RUNNING} name="RUNNING" />
-                <Bar dataKey="CANCELLED" stackId="a" fill={STATUS_COLORS.CANCELLED} name="CANCELLED" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
+      <div className="grid gap-4">
+        <Card className="lg:max-w-xl">
           <CardHeader>
             <CardTitle>Status atual das abas</CardTitle>
-            <CardDescription>Última execução de cada aba</CardDescription>
+            <CardDescription>Última execução conhecida de cada aba</CardDescription>
           </CardHeader>
           <CardContent className="h-72">
             {distribution.length === 0 ? (

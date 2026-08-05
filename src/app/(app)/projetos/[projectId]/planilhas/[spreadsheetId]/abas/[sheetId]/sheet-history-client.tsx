@@ -120,7 +120,7 @@ export function SheetHistoryClient({
           {sheet.friendlyName || sheet.name}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Histórico de atualizações — {sheet.spreadsheet.project.name}
+          Status da última atualização — {sheet.spreadsheet.project.name}
         </p>
       </div>
 

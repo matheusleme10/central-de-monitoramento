@@ -3,7 +3,8 @@ import { prisma } from "@/infrastructure/database/prisma";
 import type { RecordUpdateEventInput } from "@/lib/validations/update-event.schema";
 
 /**
- * Registra um evento de execução vindo do Apps Script.
+ * Registra o status da execução mais recente de uma aba, vindo do Apps
+ * Script.
  *
  * Auto-registra Planilha e Aba na primeira vez que o painel as vê (o
  * Apps Script não deve ficar bloqueado esperando um cadastro manual — ver
@@ -11,9 +12,12 @@ import type { RecordUpdateEventInput } from "@/lib/validations/update-event.sche
  * UI (Fase 2) continuam funcionando normalmente; o auto-registro só
  * preenche nome/URL quando o registro ainda não existe.
  *
- * O evento é identificado por `(sheetId, executionId)`: a primeira chamada
- * (status RUNNING) cria o registro; chamadas seguintes com o mesmo
- * `executionId` (SUCCESS/ERROR/CANCELLED) atualizam o mesmo registro.
+ * Existe no máximo 1 registro de status por `sheetId` (não é mais um log
+ * histórico — decisão do cliente: menos dados acumulados, só "está
+ * atualizada ou não agora"). Toda chamada sobrescreve o registro anterior
+ * daquela aba, inclusive `executionId`/`startedAt` — mesmo dentro da
+ * mesma execução (RUNNING → SUCCESS/ERROR), o resultado final é sempre
+ * "o que aconteceu por último".
  */
 export async function recordUpdateEvent(input: RecordUpdateEventInput) {
   const spreadsheet = await prisma.spreadsheet.upsert({
@@ -55,10 +59,10 @@ export async function recordUpdateEvent(input: RecordUpdateEventInput) {
       : undefined);
 
   const event = await prisma.updateEvent.upsert({
-    where: {
-      sheetId_executionId: { sheetId: sheet.id, executionId: input.executionId },
-    },
+    where: { sheetId: sheet.id },
     update: {
+      executionId: input.executionId,
+      startedAt: input.startedAt,
       finishedAt: input.finishedAt,
       durationMs,
       rowsProcessed: input.rowsProcessed,
@@ -82,6 +86,11 @@ export async function recordUpdateEvent(input: RecordUpdateEventInput) {
   return { spreadsheet, sheet, event };
 }
 
+/**
+ * Retorna o status atual da aba (0 ou 1 registro — não é mais uma lista de
+ * execuções passadas). `take` foi mantido só por compatibilidade de
+ * assinatura, sem efeito prático agora.
+ */
 export async function listUpdateEventsBySheet(sheetId: string, take = 50) {
   return prisma.updateEvent.findMany({
     where: { sheetId },

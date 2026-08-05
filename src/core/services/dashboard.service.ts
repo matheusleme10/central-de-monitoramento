@@ -2,12 +2,7 @@ import "server-only";
 import type { Session } from "next-auth";
 import { prisma } from "@/infrastructure/database/prisma";
 import { buildProjectFilter } from "@/lib/auth/project-access";
-import {
-  startOfAppDay,
-  startOfAppWeek,
-  startOfAppMonth,
-  formatToAppTimeZone,
-} from "@/lib/timezone";
+import { startOfAppDay, startOfAppWeek, startOfAppMonth } from "@/lib/timezone";
 
 function sheetScopeWhere(session: Session, projectId?: string) {
   return {
@@ -142,44 +137,6 @@ export async function getStatusDistribution(
     { status: "NEVER_UPDATED", count: Math.max(neverUpdated, 0) },
   ];
   return items.filter((item) => item.count > 0);
-}
-
-export interface TimeseriesPoint {
-  date: string;
-  SUCCESS: number;
-  ERROR: number;
-  RUNNING: number;
-  CANCELLED: number;
-}
-
-export async function getUpdatesTimeseries(
-  session: Session,
-  projectId: string | undefined,
-  days: number,
-): Promise<TimeseriesPoint[]> {
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-  const events = await prisma.updateEvent.findMany({
-    where: { startedAt: { gte: since }, sheet: sheetScopeWhere(session, projectId) },
-    select: { startedAt: true, status: true },
-  });
-
-  const buckets = new Map<string, TimeseriesPoint>();
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-    const key = formatToAppTimeZone(date, "dd/MM");
-    buckets.set(key, { date: key, SUCCESS: 0, ERROR: 0, RUNNING: 0, CANCELLED: 0 });
-  }
-
-  for (const event of events) {
-    const key = formatToAppTimeZone(event.startedAt, "dd/MM");
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket[event.status as keyof Omit<TimeseriesPoint, "date">] += 1;
-    }
-  }
-
-  return Array.from(buckets.values());
 }
 
 export interface LiveAlert {
