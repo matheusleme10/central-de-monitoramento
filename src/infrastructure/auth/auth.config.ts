@@ -116,17 +116,26 @@ export const authConfig: NextAuthConfig = {
           token.id = dbUser.id;
           token.role = dbUser.role.name as RoleKey;
           token.permissions = dbUser.role.permissions.map(
-            (rp) => rp.permission.key,
+            (rp: { permission: { key: string } }) => rp.permission.key,
           );
         }
       }
       return token;
     },
     async session({ session, token }) {
+      // O tipo `JWT` do Auth.js (`@auth/core/jwt`) estende
+      // `Record<string, unknown>`, então campos customizados (id/role/
+      // permissions) chegam aqui como `unknown` mesmo com a extensão de
+      // tipos em `src/types/next-auth.d.ts` — o `next-auth` e o
+      // `@auth/prisma-adapter` instalados apontam para versões diferentes
+      // de `@auth/core` (0.37.2 vs 0.41.3, ver `npm ls @auth/core`), então
+      // o merge de tipos não alcança o `JWT` realmente usado aqui. Os
+      // valores são de fato string/RoleKey/string[] — foram escritos por
+      // nós mesmos no callback `jwt` acima — então o cast é seguro.
       if (session.user) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.permissions = token.permissions;
+        session.user.id = token.id as string;
+        session.user.role = token.role as RoleKey;
+        session.user.permissions = token.permissions as string[];
       }
       return session;
     },

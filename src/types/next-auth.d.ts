@@ -26,3 +26,16 @@ declare module "next-auth/jwt" {
     permissions: string[];
   }
 }
+
+// `next-auth/jwt` apenas reexporta (`export * from "@auth/core/jwt"`) — a
+// interface `JWT` de fato é declarada em `@auth/core/jwt`. Sem este segundo
+// `declare module`, o merge de tipos acima não é aplicado onde o Auth.js
+// realmente usa `JWT` internamente (ex.: no callback `session`), fazendo
+// `token.id`/`token.role`/`token.permissions` ficarem como `unknown`.
+declare module "@auth/core/jwt" {
+  interface JWT {
+    id: string;
+    role: RoleKey;
+    permissions: string[];
+  }
+}
