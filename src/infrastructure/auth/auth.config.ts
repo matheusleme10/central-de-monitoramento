@@ -36,6 +36,14 @@ const credentialsSchema = z.object({
  */
 export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
+  // Necessário atrás de proxy (Vercel, qualquer PaaS): sem isso, o Auth.js
+  // pode ignorar o host real da requisição e cair de volta pra um valor
+  // fixo — foi a causa do redirect indo para localhost:3000 em produção,
+  // mesmo com AUTH_URL configurado errado na Vercel. Com trustHost, o
+  // Auth.js confia no header Host da requisição real; AUTH_URL deixa de
+  // ser obrigatório (mas se estiver setado com um valor errado, ainda
+  // pode causar problema — ver docs/DEPLOY.md).
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: 8 * 60 * 60, // 8 horas

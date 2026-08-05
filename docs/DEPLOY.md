@@ -22,7 +22,7 @@ com `openssl rand -base64 33` e nunca reutilize o valor de desenvolvimento.
 | ---------------------- | ----------- | ------------------------------------------------ |
 | `DATABASE_URL`         | sim         | string de conexão PostgreSQL                     |
 | `AUTH_SECRET`          | sim         | segredo de assinatura de sessão do Auth.js        |
-| `AUTH_URL`              | sim         | URL pública da aplicação (ex.: `https://...`)     |
+| `AUTH_URL`              | não         | opcional na Vercel (`trustHost: true` já resolve o host real da requisição); se definir, use a URL real de produção — **nunca** `http://localhost:3000` (causa redirect quebrado após login, já visto em produção) |
 | `SEED_SUPERADMIN_EMAIL`/`SEED_SUPERADMIN_PASSWORD` | opcional | usadas só por `npm run prisma:seed`, nunca em runtime — reaproveitadas também para resetar a senha do Superadmin (ver abaixo) |
 
 ## Opção 0 — Vercel (recomendado para este projeto)
@@ -43,8 +43,11 @@ generate"` do `package.json` já cuida disso automaticamente.
    para Production (e Preview, se quiser testar PRs):
    - `DATABASE_URL` — string de conexão do banco do passo 1
    - `AUTH_SECRET` — gerar com `openssl rand -base64 33`
-   - `AUTH_URL` — a URL pública do projeto na Vercel (ex.:
-     `https://seu-projeto.vercel.app`)
+   - `AUTH_URL` — **não crie essa variável** (ou, se já existir, apague-a).
+     O `trustHost: true` em `auth.config.ts` já resolve o domínio correto
+     a partir da própria requisição — definir `AUTH_URL` errado (ex.:
+     copiado de `.env.example` como `http://localhost:3000`) é a causa
+     mais comum de redirect pro localhost depois do login em produção.
 
    Login é senha única (sem e-mail, sem OAuth/Google) — ver seção
    "Autenticação" do README. A senha é a mesma de
