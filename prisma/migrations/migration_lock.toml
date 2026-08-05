@@ -1,0 +1,3 @@
+# Este arquivo é usado pelo Prisma Migrate para não misturar migrações de
+# provedores de banco de dados diferentes no mesmo projeto.
+provider = "postgresql"

@@ -1,24 +1,17 @@
 # Deploy — Central de Monitoramento de Atualizações
 
-## Pré-requisito único: gerar a migração inicial do Prisma
+## Migração inicial
 
-Este projeto foi desenvolvido em um ambiente sandbox sem acesso à rede
-usada pelo Prisma para baixar os binários do motor de query
-(`binaries.prisma.sh`), então **nenhuma migração foi gerada ainda** —
-`prisma/migrations/` não existe neste repositório.
-
-Antes do primeiro deploy (ou do primeiro uso do `docker-compose.yml`),
-rode uma vez em uma máquina com rede liberada para o Prisma:
-
-```bash
-npm install
-npx prisma generate
-npx prisma migrate dev --name init
-```
-
-Isso cria `prisma/migrations/<timestamp>_init/` e o `migration_lock.toml`.
-Commite esses arquivos — a partir daí, `prisma migrate deploy` (usado no
-CI e no runtime de produção) passa a funcionar normalmente.
+`prisma/migrations/00000000000000_init/` já está no repositório — escrita
+manualmente (não gerada por `prisma migrate dev`, já que o ambiente de
+desenvolvimento nunca teve rede liberada para
+`binaries.prisma.sh`) e validada rodando de ponta a ponta contra um
+Postgres real (WASM, via `@electric-sql/pglite`) antes de ser commitada:
+cria as 19 tabelas, aplica as 20 foreign keys, e o fluxo completo do seed
+(papéis → permissões → Superadmin) mais um upsert de `update_events`
+funcionam exatamente como o código da aplicação espera. Você não precisa
+gerar nem rodar migração nenhuma manualmente — a seção "Opção 0 — Vercel"
+abaixo configura isso para acontecer sozinho a cada deploy.
 
 ## Variáveis de ambiente obrigatórias
 
@@ -42,16 +35,7 @@ generate"` do `package.json` já cuida disso automaticamente.
 1. **Banco de dados**: crie um Postgres gerenciado acessível pela
    internet (Neon, Supabase, Vercel Postgres/Neon integration, Railway,
    RDS, etc.) — a Vercel não hospeda Postgres sozinha.
-2. **Gerar a migração inicial** (uma vez, na sua máquina, com
-   `DATABASE_URL` apontando para esse banco):
-   ```bash
-   cd central-monitoramento
-   npm install
-   npx prisma migrate dev --name init
-   ```
-   Isso cria `prisma/migrations/` e já aplica o schema no banco. Commite
-   os arquivos gerados.
-3. **Importar o repositório na Vercel** (dashboard → Add New → Project →
+2. **Importar o repositório na Vercel** (dashboard → Add New → Project →
    selecione o repo). Se o projeto não estiver na raiz do repositório
    Git, configure o **Root Directory** como `central-monitoramento` nas
    configurações do projeto.
@@ -62,16 +46,32 @@ generate"` do `package.json` já cuida disso automaticamente.
    - `AUTH_URL` — a URL pública do projeto na Vercel (ex.:
      `https://seu-projeto.vercel.app`)
 
-   Login é só e-mail/senha (Credentials) — não há OAuth/Google configurado
-   nesta versão, então não há URI de redirecionamento pra cadastrar.
-5. **Deploy** — a Vercel roda `npm install` (dispara `postinstall` →
-   `prisma generate`) e depois `next build` automaticamente. Não é
-   preciso configurar Build Command customizado.
-6. **Migrações futuras**: quando o schema mudar, rode
-   `npx prisma migrate dev --name <nome>` localmente contra o banco de
-   produção (ou um banco de homologação) e commite a nova pasta em
-   `prisma/migrations/` antes do próximo deploy — a Vercel não roda
-   `migrate deploy` sozinha.
+   Login é senha única (sem e-mail, sem OAuth/Google) — ver seção
+   "Autenticação" do README. A senha é a mesma de
+   `SEED_SUPERADMIN_PASSWORD` abaixo: para trocá-la, edite essa variável
+   na Vercel e redeploy — nenhum comando local necessário.
+   - `SEED_SUPERADMIN_EMAIL` — qualquer e-mail válido (é só um
+     identificador interno no banco; você nunca digita isso no login)
+   - `SEED_SUPERADMIN_PASSWORD` — **esta é a senha do painel**. Trocar o
+     valor aqui + redeploy é como você muda a senha sem tocar em código
+     ou banco diretamente.
+4. **Build Command customizado** (Project Settings → Build & Development
+   Settings → Build Command → "Override"):
+   ```
+   npx prisma migrate deploy && npx tsx prisma/seed.ts && next build
+   ```
+   Isso faz a Vercel aplicar as migrações pendentes e resincronizar
+   papéis/permissões/senha do Superadmin automaticamente **a cada
+   deploy**, direto no ambiente da Vercel (que tem rede liberada para o
+   Prisma, diferente do sandbox onde este projeto foi construído). Sem
+   isso, o app builda mas as tabelas nunca são criadas no banco.
+5. **Deploy** — clique em Deploy (ou dê `git push`, se o projeto já
+   estiver conectado ao repo). A Vercel roda `npm install` (dispara
+   `postinstall` → `prisma generate`), depois o Build Command do passo 4.
+6. **Migrações futuras**: quando o schema mudar, adicione uma nova pasta
+   em `prisma/migrations/<timestamp>_<nome>/migration.sql` com o SQL da
+   mudança e commite — o Build Command do passo 4 aplica sozinho no
+   próximo deploy.
 
 O `Dockerfile`/`docker-compose.yml` abaixo são uma alternativa para quem
 prefere self-host (VPS, servidor interno) em vez da Vercel — não são
