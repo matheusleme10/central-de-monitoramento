@@ -61,6 +61,7 @@ export const authConfig: NextAuthConfig = {
         const ip = request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
         const rateLimit = checkRateLimit(`login:${ip}`, 5);
         if (!rateLimit.allowed) {
+          console.warn("[auth] login bloqueado por rate limit", { ip });
           return null;
         }
 
@@ -73,10 +74,20 @@ export const authConfig: NextAuthConfig = {
           include: { role: true },
         });
 
-        if (!systemUser?.passwordHash) return null;
+        if (!systemUser?.passwordHash) {
+          // Nunca loga a senha digitada — só o fato de não haver conta
+          // Superadmin ativa/com senha definida (ex.: seed não rodou).
+          console.warn("[auth] nenhuma conta Superadmin ativa com senha definida foi encontrada");
+          return null;
+        }
 
         const isValid = await verifyPassword(systemUser.passwordHash, password);
-        if (!isValid) return null;
+        if (!isValid) {
+          console.warn("[auth] senha não confere com o hash da conta Superadmin", {
+            userId: systemUser.id,
+          });
+          return null;
+        }
 
         await prisma.user.update({
           where: { id: systemUser.id },
