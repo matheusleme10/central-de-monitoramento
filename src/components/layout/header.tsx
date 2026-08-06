@@ -25,10 +25,12 @@ export async function Header() {
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <GlobalSearch />
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex flex-1 justify-center sm:justify-start">
+        <GlobalSearch />
+      </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         <ThemeToggle />
 
         {user && (

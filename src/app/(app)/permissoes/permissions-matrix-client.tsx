@@ -14,6 +14,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { ROLE_LABELS, type RoleKey } from "@/lib/constants/roles";
+import { PERMISSION_LABELS, type PermissionKey } from "@/lib/constants/permissions";
 
 interface Permission {
   id: string;
@@ -105,10 +106,12 @@ export function PermissionsMatrixClient({
           {permissions.map((permission) => (
             <TableRow key={permission.id}>
               <TableCell>
-                <p className="text-sm font-medium">{permission.key}</p>
-                {permission.description && (
-                  <p className="text-xs text-muted-foreground">{permission.description}</p>
-                )}
+                <p className="text-sm font-medium">
+                  {PERMISSION_LABELS[permission.key as PermissionKey] ?? permission.key}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {permission.description || permission.key}
+                </p>
               </TableCell>
               {roles.map((role) => {
                 const isSuperadmin = role.name === "SUPERADMIN";

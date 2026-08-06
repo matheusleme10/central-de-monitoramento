@@ -25,12 +25,15 @@ export default async function MapaPage({ searchParams }: PageProps) {
     listProjects(session),
   ]);
 
+  const isSuperadmin = session.user.role === "SUPERADMIN";
+
   return (
     <MapClient
       initialNodes={nodes}
       initialEdges={edges}
       projects={projects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
       currentProjectId={projectId ?? ""}
+      isSuperadmin={isSuperadmin}
     />
   );
 }

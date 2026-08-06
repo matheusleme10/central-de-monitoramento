@@ -14,11 +14,23 @@ import ReactFlow, {
   type Edge,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { ExternalLink, History, Search, X } from "lucide-react";
+import { toast } from "sonner";
+import { ExternalLink, History, Search, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectTrigger,
@@ -28,6 +40,18 @@ import {
 } from "@/components/ui/select";
 import { GraphNode, type GraphNodeData } from "./graph-node";
 import type { GraphNodeKind } from "@/core/services/graph.service";
+
+const DELETE_ENDPOINT: Partial<Record<GraphNodeKind, (meta: Record<string, unknown>) => string>> = {
+  PROJECT: (meta) => `/api/v1/projects/${meta.projectId}`,
+  SPREADSHEET: (meta) => `/api/v1/spreadsheets/${meta.spreadsheetId}`,
+  SHEET: (meta) => `/api/v1/sheets/${meta.sheetId}`,
+};
+
+const DELETE_LABEL: Partial<Record<GraphNodeKind, string>> = {
+  PROJECT: "projeto",
+  SPREADSHEET: "planilha",
+  SHEET: "aba",
+};
 
 const nodeTypes = { graphNode: GraphNode };
 
@@ -46,15 +70,34 @@ const ALL_KINDS = Object.keys(KIND_LABELS) as GraphNodeKind[];
 function MapCanvas({
   initialNodes,
   initialEdges,
+  isSuperadmin,
 }: {
   initialNodes: Node<GraphNodeData>[];
   initialEdges: Edge[];
+  isSuperadmin: boolean;
 }) {
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [query, setQuery] = useState("");
   const [visibleKinds, setVisibleKinds] = useState<Set<GraphNodeKind>>(new Set(ALL_KINDS));
   const [selected, setSelected] = useState<Node<GraphNodeData> | null>(null);
+
+  function handleNodeDeleted(deletedNode: Node<GraphNodeData>) {
+    const { kind, meta } = deletedNode.data;
+    setNodes((prev) =>
+      prev.filter((n) => {
+        if (n.id === deletedNode.id) return false;
+        if (kind === "PROJECT" && n.data.meta.projectId === meta.projectId) return false;
+        if (kind === "SPREADSHEET" && n.data.meta.spreadsheetId === meta.spreadsheetId && n.data.kind === "SHEET")
+          return false;
+        return true;
+      }),
+    );
+    setEdges((prev) =>
+      prev.filter((e) => e.source !== deletedNode.id && e.target !== deletedNode.id),
+    );
+    setSelected(null);
+  }
 
   const decoratedNodes = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -138,7 +181,14 @@ function MapCanvas({
         </ReactFlow>
       </div>
 
-      {selected && <NodeDetailsPanel node={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <NodeDetailsPanel
+          node={selected}
+          onClose={() => setSelected(null)}
+          isSuperadmin={isSuperadmin}
+          onDeleted={handleNodeDeleted}
+        />
+      )}
     </div>
   );
 }
@@ -146,24 +196,74 @@ function MapCanvas({
 function NodeDetailsPanel({
   node,
   onClose,
+  isSuperadmin,
+  onDeleted,
 }: {
   node: Node<GraphNodeData>;
   onClose: () => void;
+  isSuperadmin: boolean;
+  onDeleted: (node: Node<GraphNodeData>) => void;
 }) {
   const { kind, label, meta } = node.data;
+  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteUrlBuilder = DELETE_ENDPOINT[kind];
+  const canDeleteThisNode = isSuperadmin && Boolean(deleteUrlBuilder);
+
+  async function handleDelete() {
+    if (!deleteUrlBuilder) return;
+    setIsDeleting(true);
+    const response = await fetch(deleteUrlBuilder(meta), { method: "DELETE" });
+    setIsDeleting(false);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      toast.error(body.error ?? `Não foi possível excluir ${DELETE_LABEL[kind]}`);
+      return;
+    }
+    toast.success(`${label} removido(a)`);
+    onDeleted(node);
+  }
 
   return (
     <aside className="w-80 shrink-0 overflow-y-auto rounded-lg border border-border bg-card p-4">
-      <div className="mb-3 flex items-start justify-between">
-        <div>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {KIND_LABELS[kind]}
           </p>
-          <h2 className="text-lg font-semibold">{label}</h2>
+          <h2 className="truncate text-lg font-semibold">{label}</h2>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {canDeleteThisNode && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Excluir ${DELETE_LABEL[kind]}`}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir {DELETE_LABEL[kind]}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    &ldquo;{label}&rdquo; e tudo que está abaixo na hierarquia deixará de aparecer
+                    nas listagens. Ação restrita a Superadmin.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3 text-sm">
@@ -243,11 +343,13 @@ export function MapClient({
   initialEdges,
   projects,
   currentProjectId,
+  isSuperadmin,
 }: {
   initialNodes: Node<GraphNodeData>[];
   initialEdges: Edge[];
   projects: Array<{ id: string; name: string }>;
   currentProjectId: string;
+  isSuperadmin: boolean;
 }) {
   const router = useRouter();
 
@@ -284,7 +386,7 @@ export function MapClient({
       </div>
 
       <ReactFlowProvider>
-        <MapCanvas initialNodes={initialNodes} initialEdges={initialEdges} />
+        <MapCanvas initialNodes={initialNodes} initialEdges={initialEdges} isSuperadmin={isSuperadmin} />
       </ReactFlowProvider>
     </div>
   );

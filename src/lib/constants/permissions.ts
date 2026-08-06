@@ -24,6 +24,25 @@ export const PERMISSIONS = {
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
+/** Rótulos em português exibidos na tela de Permissões. */
+export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  "project:read": "Visualizar projetos",
+  "project:write": "Criar e editar projetos",
+  "project:delete": "Excluir projetos",
+  "spreadsheet:read": "Visualizar planilhas",
+  "spreadsheet:write": "Criar, editar e excluir planilhas",
+  "sheet:read": "Visualizar abas",
+  "sheet:write": "Criar, editar e excluir abas",
+  "update_event:read": "Visualizar histórico de atualizações",
+  "update_event:write": "Registrar atualizações (via API/Apps Script)",
+  "user:manage": "Gerenciar usuários",
+  "role:manage": "Gerenciar papéis e permissões",
+  "group:manage": "Gerenciar grupos",
+  "api_token:manage": "Gerenciar tokens de API",
+  "audit_log:read": "Visualizar auditoria",
+  "alert:manage": "Gerenciar alertas",
+};
+
 /**
  * Matriz padrão papel → permissões, usada pelo seed para popular
  * `role_permissions`. Superadmin recebe todas as permissões automaticamente

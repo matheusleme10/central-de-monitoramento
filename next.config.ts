@@ -37,10 +37,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // "standalone" gera um bundle mínimo em .next/standalone, usado pelo
-  // Dockerfile multi-stage (ver docs/DEPLOY.md) — evita copiar node_modules
-  // inteiro para a imagem final.
-  output: "standalone",
   async headers() {
     return [
       {

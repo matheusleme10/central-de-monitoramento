@@ -4,6 +4,7 @@ export const createSheetSchema = z.object({
   gid: z.string().trim().min(1, "GID é obrigatório"),
   name: z.string().trim().min(1, "Nome é obrigatório").max(200),
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
+  description: z.string().trim().max(2000).optional().or(z.literal("")),
   url: z.string().trim().url("Informe a URL direta da aba"),
 });
 

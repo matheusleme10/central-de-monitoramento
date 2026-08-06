@@ -7,11 +7,21 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Trash2, ExternalLink, Loader2, Sheet as SheetIcon } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ExternalLink,
+  Loader2,
+  Sheet as SheetIcon,
+  ChevronDown,
+  History,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/monitoring/status-badge";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardHeader,
@@ -54,6 +64,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { formatToAppTimeZone } from "@/lib/timezone";
+import { cn } from "@/lib/utils";
 import { ApiTokensSection } from "./api-tokens-section";
 import { ObsidianLinksSection } from "./obsidian-links-section";
 
@@ -70,6 +82,21 @@ const ACCESS_LEVEL_LABELS: Record<string, string> = {
   MANAGER: "Gerente",
 };
 
+interface SheetSummary {
+  id: string;
+  gid: string;
+  name: string;
+  friendlyName: string | null;
+  description: string | null;
+  url: string;
+}
+
+interface LatestEventInfo {
+  status: string;
+  startedAt: string | Date;
+  rowsProcessed: number | null;
+}
+
 interface ProjectData {
   id: string;
   name: string;
@@ -80,6 +107,7 @@ interface ProjectData {
     friendlyName: string | null;
     url: string;
     spreadsheetId: string;
+    sheets: SheetSummary[];
     _count: { sheets: number };
   }>;
   members: Array<{
@@ -112,6 +140,33 @@ interface ObsidianLinkRow {
   createdAt: string | Date;
 }
 
+function aggregateStatus(
+  sheets: SheetSummary[],
+  latestEventBySheet: Record<string, LatestEventInfo>,
+): { label: string; variant: "success" | "destructive" | "warning" | "info" | "secondary" } {
+  if (sheets.length === 0) return { label: "Sem abas", variant: "secondary" };
+
+  let hasError = false;
+  let hasRunning = false;
+  let hasPending = false;
+
+  for (const sheet of sheets) {
+    const event = latestEventBySheet[sheet.id];
+    if (!event) {
+      hasPending = true;
+    } else if (event.status === "ERROR") {
+      hasError = true;
+    } else if (event.status === "RUNNING") {
+      hasRunning = true;
+    }
+  }
+
+  if (hasError) return { label: "Com erro", variant: "destructive" };
+  if (hasPending) return { label: "Pendente", variant: "warning" };
+  if (hasRunning) return { label: "Em andamento", variant: "info" };
+  return { label: "Atualizado", variant: "success" };
+}
+
 export function ProjectDetailClient({
   project,
   allUsers,
@@ -119,6 +174,7 @@ export function ProjectDetailClient({
   canManageTokens,
   apiTokens,
   obsidianLinks,
+  latestEventBySheet,
 }: {
   project: ProjectData;
   allUsers: UserOption[];
@@ -126,12 +182,23 @@ export function ProjectDetailClient({
   canManageTokens: boolean;
   apiTokens: ApiTokenRow[];
   obsidianLinks: ObsidianLinkRow[];
+  latestEventBySheet: Record<string, LatestEventInfo>;
 }) {
   const router = useRouter();
   const [spreadsheets, setSpreadsheets] = useState(project.spreadsheets);
   const [members, setMembers] = useState(project.members);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMemberOpen, setIsMemberOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleCollapsed(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const {
     register,
@@ -151,7 +218,7 @@ export function ProjectDetailClient({
       toast.error(body.error ?? "Não foi possível criar a planilha");
       return;
     }
-    setSpreadsheets((prev) => [...prev, { ...body.data, _count: { sheets: 0 } }]);
+    setSpreadsheets((prev) => [...prev, { ...body.data, sheets: [], _count: { sheets: 0 } }]);
     toast.success("Planilha cadastrada");
     setIsCreateOpen(false);
     reset();
@@ -262,70 +329,129 @@ export function ProjectDetailClient({
             </Dialog>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {spreadsheets.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               Nenhuma planilha cadastrada.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Abas</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {spreadsheets.map((sheet) => (
-                  <TableRow key={sheet.id}>
-                    <TableCell>
+            spreadsheets.map((spreadsheet) => {
+              const status = aggregateStatus(spreadsheet.sheets, latestEventBySheet);
+              const isCollapsed = collapsed.has(spreadsheet.id);
+              return (
+                <div key={spreadsheet.id} className="rounded-lg border border-border bg-card">
+                  <div className="flex flex-wrap items-center gap-3 p-4">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <SheetIcon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
                       <Link
-                        href={`/projetos/${project.id}/planilhas/${sheet.id}`}
-                        className="flex items-center gap-2 font-medium hover:text-primary hover:underline"
+                        href={`/projetos/${project.id}/planilhas/${spreadsheet.id}`}
+                        className="truncate font-medium hover:text-primary hover:underline"
                       >
-                        <SheetIcon className="h-4 w-4 text-muted-foreground" />
-                        {sheet.friendlyName || sheet.name}
+                        {spreadsheet.friendlyName || spreadsheet.name}
                       </Link>
-                    </TableCell>
-                    <TableCell>{sheet._count.sheets}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" asChild>
-                          <a href={sheet.url} target="_blank" rel="noreferrer" title="Abrir no Google Sheets">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                        {canWrite && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" aria-label="Excluir planilha">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Excluir planilha?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  As abas e o histórico vinculados deixarão de aparecer nas
-                                  listagens.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteSpreadsheet(sheet.id)}>
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      <p className="truncate font-mono text-xs text-muted-foreground">
+                        ID: {spreadsheet.spreadsheetId} · {spreadsheet._count.sheets} aba(s)
+                      </p>
+                    </div>
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Button variant="ghost" size="icon" asChild>
+                      <a href={spreadsheet.url} target="_blank" rel="noreferrer" title="Abrir no Google Sheets">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                    {canWrite && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label="Excluir planilha">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir planilha?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              As abas e o histórico vinculados deixarão de aparecer nas listagens.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteSpreadsheet(spreadsheet.id)}>
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleCollapsed(spreadsheet.id)}
+                      aria-label={isCollapsed ? "Expandir abas" : "Recolher abas"}
+                    >
+                      <ChevronDown
+                        className={cn("h-4 w-4 transition-transform", isCollapsed && "-rotate-90")}
+                      />
+                    </Button>
+                  </div>
+
+                  {!isCollapsed &&
+                    (spreadsheet.sheets.length === 0 ? (
+                      <p className="border-t border-border px-4 py-4 text-center text-sm text-muted-foreground">
+                        Nenhuma aba cadastrada nesta planilha.
+                      </p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-t border-border hover:bg-transparent">
+                            <TableHead>Aba</TableHead>
+                            <TableHead>Linhas</TableHead>
+                            <TableHead>Atualização</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Histórico</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {spreadsheet.sheets.map((sheet) => {
+                            const event = latestEventBySheet[sheet.id];
+                            return (
+                              <TableRow key={sheet.id}>
+                                <TableCell className="font-medium">
+                                  {sheet.friendlyName || sheet.name}
+                                  {sheet.description && (
+                                    <p className="mt-0.5 line-clamp-1 text-xs font-normal text-muted-foreground">
+                                      {sheet.description}
+                                    </p>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {event?.rowsProcessed ?? "—"}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {event ? formatToAppTimeZone(event.startedAt, "dd/MM/yyyy HH:mm") : "—"}
+                                </TableCell>
+                                <TableCell>
+                                  <StatusBadge status={event?.status} />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button variant="ghost" size="icon" asChild aria-label="Ver histórico">
+                                    <Link
+                                      href={`/projetos/${project.id}/planilhas/${spreadsheet.id}/abas/${sheet.id}`}
+                                    >
+                                      <History className="h-4 w-4" />
+                                    </Link>
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    ))}
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>

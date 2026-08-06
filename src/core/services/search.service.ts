@@ -3,7 +3,7 @@ import type { Session } from "next-auth";
 import { prisma } from "@/infrastructure/database/prisma";
 import { buildProjectFilter } from "@/lib/auth/project-access";
 
-const TAKE = 5;
+const TAKE = 8;
 
 /**
  * Pesquisa global (Ctrl+K), no estilo Obsidian: busca por projeto,
@@ -48,11 +48,15 @@ export async function globalSearch(session: Session, rawQuery: string) {
       take: TAKE,
     }),
     prisma.sheet.findMany({
-      where: { ...sheetScope, OR: [{ name: insensitive }, { friendlyName: insensitive }] },
+      where: {
+        ...sheetScope,
+        OR: [{ name: insensitive }, { friendlyName: insensitive }, { description: insensitive }],
+      },
       select: {
         id: true,
         name: true,
         friendlyName: true,
+        description: true,
         spreadsheetId: true,
         spreadsheet: { select: { id: true, name: true, projectId: true, project: { select: { name: true } } } },
       },

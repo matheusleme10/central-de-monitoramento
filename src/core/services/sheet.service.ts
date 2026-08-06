@@ -23,7 +23,7 @@ export async function getSheetById(sheetId: string) {
 
 export async function createSheet(
   spreadsheetId: string,
-  input: { gid: string; name: string; friendlyName?: string; url: string },
+  input: { gid: string; name: string; friendlyName?: string; description?: string; url: string },
 ) {
   return prisma.sheet.create({
     data: {
@@ -31,6 +31,7 @@ export async function createSheet(
       gid: input.gid,
       name: input.name,
       friendlyName: input.friendlyName || null,
+      description: input.description || null,
       url: input.url,
     },
   });
@@ -44,6 +45,9 @@ export async function updateSheet(sheetId: string, input: UpdateSheetInput) {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.friendlyName !== undefined
         ? { friendlyName: input.friendlyName || null }
+        : {}),
+      ...(input.description !== undefined
+        ? { description: input.description || null }
         : {}),
       ...(input.url !== undefined ? { url: input.url } : {}),
     },

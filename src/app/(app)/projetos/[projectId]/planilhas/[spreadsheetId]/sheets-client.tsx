@@ -7,12 +7,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/monitoring/status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardHeader,
@@ -52,9 +53,25 @@ const sheetSchema = z.object({
   gid: z.string().trim().min(1, "GID é obrigatório"),
   name: z.string().trim().min(1, "Nome é obrigatório").max(200),
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
+  description: z.string().trim().max(2000).optional().or(z.literal("")),
   url: z.string().trim().url("Informe a URL direta da aba"),
 });
 type SheetFormValues = z.infer<typeof sheetSchema>;
+
+const editSheetSchema = z.object({
+  friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
+  description: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+type EditSheetFormValues = z.infer<typeof editSheetSchema>;
+
+interface SheetRow {
+  id: string;
+  gid: string;
+  name: string;
+  friendlyName: string | null;
+  description: string | null;
+  url: string;
+}
 
 interface SpreadsheetData {
   id: string;
@@ -63,13 +80,7 @@ interface SpreadsheetData {
   url: string;
   projectId: string;
   project: { id: string; name: string };
-  sheets: Array<{
-    id: string;
-    gid: string;
-    name: string;
-    friendlyName: string | null;
-    url: string;
-  }>;
+  sheets: SheetRow[];
 }
 
 export function SheetsClient({
@@ -86,6 +97,7 @@ export function SheetsClient({
   const router = useRouter();
   const [sheets, setSheets] = useState(spreadsheet.sheets);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<SheetRow | null>(null);
 
   const {
     register,
@@ -176,6 +188,15 @@ export function SheetsClient({
                     <Input id="friendlyName" {...register("friendlyName")} />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="description">Descrição (o que esta aba contém)</Label>
+                    <Textarea
+                      id="description"
+                      rows={3}
+                      placeholder="Ex.: Base de pedidos consolidada, atualizada diariamente pelo job do Coalesce..."
+                      {...register("description")}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="gid">GID</Label>
                     <Input id="gid" placeholder="0" {...register("gid")} />
                     {errors.gid && <p className="text-xs text-destructive">{errors.gid.message}</p>}
@@ -225,6 +246,11 @@ export function SheetsClient({
                       >
                         {sheet.friendlyName || sheet.name}
                       </Link>
+                      {sheet.description && (
+                        <p className="mt-0.5 line-clamp-1 text-xs font-normal text-muted-foreground">
+                          {sheet.description}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{sheet.gid}</TableCell>
                     <TableCell>
@@ -237,6 +263,16 @@ export function SheetsClient({
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         </Button>
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditing(sheet)}
+                            aria-label="Editar aba"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         {canWrite && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -270,6 +306,83 @@ export function SheetsClient({
           )}
         </CardContent>
       </Card>
+
+      {editing && (
+        <Dialog open onOpenChange={(open) => !open && setEditing(null)}>
+          <EditSheetDialogContent
+            sheet={editing}
+            onSuccess={(updated) => {
+              setSheets((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+              setEditing(null);
+              router.refresh();
+            }}
+          />
+        </Dialog>
+      )}
     </div>
+  );
+}
+
+function EditSheetDialogContent({
+  sheet,
+  onSuccess,
+}: {
+  sheet: SheetRow;
+  onSuccess: (sheet: SheetRow) => void;
+}) {
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<EditSheetFormValues>({
+    resolver: zodResolver(editSheetSchema),
+    defaultValues: {
+      friendlyName: sheet.friendlyName ?? "",
+      description: sheet.description ?? "",
+    },
+  });
+
+  async function onSubmit(values: EditSheetFormValues) {
+    const response = await fetch(`/api/v1/sheets/${sheet.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      toast.error(body.error ?? "Não foi possível salvar a aba");
+      return;
+    }
+    toast.success("Aba atualizada");
+    onSuccess(body.data);
+  }
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Editar aba</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <div className="space-y-2">
+          <Label htmlFor="edit-friendlyName">Nome amigável</Label>
+          <Input id="edit-friendlyName" {...register("friendlyName")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-description">Descrição (o que esta aba contém)</Label>
+          <Textarea
+            id="edit-description"
+            rows={4}
+            placeholder="Ex.: Base de pedidos consolidada, atualizada diariamente pelo job do Coalesce..."
+            {...register("description")}
+          />
+        </div>
+        <DialogFooter>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }

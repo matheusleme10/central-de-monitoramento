@@ -26,7 +26,13 @@ export async function getProjectById(session: Session, projectId: string) {
       spreadsheets: {
         where: { deletedAt: null },
         orderBy: { name: "asc" },
-        include: { _count: { select: { sheets: true } } },
+        include: {
+          _count: { select: { sheets: true } },
+          sheets: {
+            where: { deletedAt: null },
+            orderBy: { name: "asc" },
+          },
+        },
       },
       members: {
         include: {

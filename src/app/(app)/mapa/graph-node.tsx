@@ -15,15 +15,43 @@ import type { GraphNodeKind } from "@/core/services/graph.service";
 
 const NODE_STYLES: Record<
   GraphNodeKind,
-  { icon: React.ComponentType<{ className?: string }>; className: string }
+  { icon: React.ComponentType<{ className?: string }>; className: string; iconWrap: string }
 > = {
-  PROJECT: { icon: FolderKanban, className: "border-primary/60 bg-primary/10 text-primary" },
-  SPREADSHEET: { icon: SheetIcon, className: "border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-  SHEET: { icon: SheetIcon, className: "border-border bg-card text-foreground" },
-  APPSCRIPT: { icon: Code2, className: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  DATABASE: { icon: Database, className: "border-indigo-500/50 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
-  API: { icon: Server, className: "border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-  DOCS: { icon: BookOpen, className: "border-teal-500/50 bg-teal-500/10 text-teal-600 dark:text-teal-400" },
+  PROJECT: {
+    icon: FolderKanban,
+    className: "border-primary/40 bg-card text-foreground",
+    iconWrap: "bg-primary/10 text-primary",
+  },
+  SPREADSHEET: {
+    icon: SheetIcon,
+    className: "border-info/30 bg-card text-foreground",
+    iconWrap: "bg-info/10 text-info",
+  },
+  SHEET: {
+    icon: SheetIcon,
+    className: "border-border bg-card text-foreground",
+    iconWrap: "bg-muted text-muted-foreground",
+  },
+  APPSCRIPT: {
+    icon: Code2,
+    className: "border-warning/30 bg-card text-foreground",
+    iconWrap: "bg-warning/10 text-warning",
+  },
+  DATABASE: {
+    icon: Database,
+    className: "border-success/30 bg-card text-foreground",
+    iconWrap: "bg-success/10 text-success",
+  },
+  API: {
+    icon: Server,
+    className: "border-primary/30 bg-card text-foreground",
+    iconWrap: "bg-primary/10 text-primary",
+  },
+  DOCS: {
+    icon: BookOpen,
+    className: "border-border bg-card text-foreground",
+    iconWrap: "bg-muted text-muted-foreground",
+  },
 };
 
 export interface GraphNodeData {
@@ -42,20 +70,22 @@ function GraphNodeComponent({ data, selected }: NodeProps<GraphNodeData>) {
   return (
     <div
       className={cn(
-        "min-w-40 rounded-lg border-2 px-3 py-2 shadow-sm transition-opacity",
+        "min-w-44 rounded-xl border bg-card px-3 py-2.5 shadow-sm transition-all hover:shadow-md",
         style.className,
-        selected && "ring-2 ring-ring",
+        selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
         data.dimmed && "opacity-20",
-        data.highlighted && "ring-2 ring-ring",
+        data.highlighted && "ring-2 ring-ring ring-offset-2 ring-offset-background",
       )}
     >
       <Handle type="target" position={Position.Top} className="!bg-muted-foreground" />
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 shrink-0" />
+      <div className="flex items-center gap-2.5">
+        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md", style.iconWrap)}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{data.label}</p>
           {data.subtitle && (
-            <p className="truncate text-xs opacity-70">{data.subtitle}</p>
+            <p className="truncate text-xs text-muted-foreground">{data.subtitle}</p>
           )}
         </div>
       </div>

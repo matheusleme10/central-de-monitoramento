@@ -6,6 +6,7 @@ import { getProjectById } from "@/core/services/project.service";
 import { listUsers } from "@/core/services/user.service";
 import { listApiTokensByProject } from "@/core/services/api-token.service";
 import { listObsidianLinksByProject } from "@/core/services/obsidian-link.service";
+import { getLatestEventPerSheet } from "@/core/services/update-event.service";
 import { ProjectDetailClient } from "./project-detail-client";
 
 export const metadata: Metadata = { title: "Detalhe do Projeto — Central de Monitoramento" };
@@ -35,6 +36,21 @@ export default async function ProjetoDetailPage({ params }: PageProps) {
   const apiTokens = canManageTokens ? await listApiTokensByProject(projectId) : [];
   const obsidianLinks = await listObsidianLinksByProject(projectId);
 
+  const allSheetIds = project.spreadsheets.flatMap((s: { sheets: { id: string }[] }) =>
+    s.sheets.map((sheet) => sheet.id),
+  );
+  const latestEvents = await getLatestEventPerSheet(allSheetIds);
+  const latestEventBySheet = Object.fromEntries(
+    Array.from(latestEvents.entries()).map(([sheetId, event]) => [
+      sheetId,
+      {
+        status: event.status as string,
+        startedAt: event.startedAt as Date,
+        rowsProcessed: event.rowsProcessed as number | null,
+      },
+    ]),
+  );
+
   return (
     <ProjectDetailClient
       project={project}
@@ -43,6 +59,7 @@ export default async function ProjetoDetailPage({ params }: PageProps) {
       canManageTokens={canManageTokens}
       apiTokens={apiTokens}
       obsidianLinks={obsidianLinks}
+      latestEventBySheet={latestEventBySheet}
     />
   );
 }

@@ -45,7 +45,7 @@
 
   --border: 220 13% 90%;
   --input: 220 13% 90%;
-  --ring: 221 83% 53%;
+  --ring: 221 60% 58%;
 
   --radius: 0.5rem;
 
@@ -90,7 +90,7 @@
 
   --border: 222 16% 18%;
   --input: 222 16% 18%;
-  --ring: 356 80% 56%;
+  --ring: 356 65% 52%;
 
   --sidebar: 222 26% 5%;
   --sidebar-foreground: 210 15% 85%;
@@ -144,4 +144,48 @@ body {
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
+}
+
+/* -----------------------------------------------------------------------
+ * ReactFlow (página Mapa) — o tema padrão da lib é sempre branco/cinza;
+ * aqui ele passa a usar os tokens do app nos dois temas.
+ * ---------------------------------------------------------------------*/
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__controls {
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.react-flow__controls-button:hover {
+  background: hsl(var(--accent));
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.react-flow__minimap {
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  overflow: hidden;
+}
+
+.react-flow__edge-path {
+  stroke: hsl(var(--border));
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: hsl(var(--primary));
 }

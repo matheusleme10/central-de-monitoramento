@@ -233,6 +233,7 @@ model Sheet {
   gid           String // GID da aba no Google Sheets
   name          String
   friendlyName  String?   @map("friendly_name")
+  description   String?   @db.Text // O que esta aba contém (tipo "Datalake" — dicionário de dados)
   url           String
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")

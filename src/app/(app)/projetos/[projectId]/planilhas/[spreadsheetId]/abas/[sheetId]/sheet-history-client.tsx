@@ -36,6 +36,7 @@ interface SheetData {
   id: string;
   name: string;
   friendlyName: string | null;
+  description: string | null;
   gid: string;
   spreadsheet: {
     id: string;
@@ -122,6 +123,11 @@ export function SheetHistoryClient({
         <p className="text-sm text-muted-foreground">
           Status da última atualização — {sheet.spreadsheet.project.name}
         </p>
+        {sheet.description && (
+          <p className="mt-2 max-w-2xl rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            {sheet.description}
+          </p>
+        )}
       </div>
 
       {canWrite && (
