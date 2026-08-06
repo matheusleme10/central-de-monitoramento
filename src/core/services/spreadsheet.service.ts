@@ -27,17 +27,30 @@ export async function listAllSpreadsheets(projectIds?: string[]) {
 }
 
 export async function getSpreadsheetById(spreadsheetId: string) {
-  return prisma.spreadsheet.findFirst({
+  const spreadsheet = await prisma.spreadsheet.findFirst({
     where: { id: spreadsheetId, deletedAt: null },
     include: {
       project: { select: { id: true, name: true } },
       sheets: {
         where: { deletedAt: null },
         orderBy: { name: "asc" },
-        include: { responsible: true, schedule: true },
+        // A relação em Sheet chama-se `schedules` (array) mesmo a aba tendo
+        // no máximo um Schedule (garantido por @@unique([sheetId])) — por
+        // isso normalizamos pra `schedule` (singular) abaixo, no formato que
+        // o front-end espera.
+        include: { responsible: true, schedules: true },
       },
     },
   });
+  if (!spreadsheet) return null;
+
+  return {
+    ...spreadsheet,
+    sheets: spreadsheet.sheets.map(({ schedules, ...sheet }) => ({
+      ...sheet,
+      schedule: schedules[0] ?? null,
+    })),
+  };
 }
 
 export async function createSpreadsheet(
