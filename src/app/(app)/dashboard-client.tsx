@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
@@ -23,14 +22,8 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { DashboardIndicators, StatusDistributionItem, LiveAlert } from "@/core/services/dashboard.service";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -73,79 +66,60 @@ export function DashboardClient({
   indicators,
   distribution,
   alerts,
-  projects,
-  currentProjectId,
   userName,
 }: {
   indicators: DashboardIndicators;
   distribution: StatusDistributionItem[];
   alerts: LiveAlert[];
-  projects: Array<{ id: string; name: string }>;
-  currentProjectId: string;
   userName: string;
 }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  function updateFilter(key: "projectId", value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (!value || value === "ALL") {
-      params.delete(key);
-    } else {
-      params.set(key, value);
-    }
-    router.push(`/?${params.toString()}`);
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Bem-vindo, {userName}</p>
-        </div>
-
-        <div className="flex gap-2">
-          <Select value={currentProjectId || "ALL"} onValueChange={(v) => updateFilter("projectId", v)}>
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="Todos os projetos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos os projetos</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">
+          Bem-vindo, {userName} — visão consolidada de todos os projetos. Use a busca no topo para
+          abrir um projeto específico.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {INDICATOR_CARDS.map(({ key, label, icon: Icon, tone }) => (
-          <div
-            key={key}
-            className="rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">{label}</p>
+        {INDICATOR_CARDS.map(({ key, label, icon: Icon, tone }) => {
+          const toneVar =
+            tone === "destructive" ? "var(--destructive)" : tone === "warning" ? "var(--warning)" : "var(--primary)";
+          const toneClass =
+            tone === "destructive"
+              ? { bar: "from-destructive", iconWrap: "bg-destructive/10 text-destructive" }
+              : tone === "warning"
+                ? { bar: "from-warning", iconWrap: "bg-warning/10 text-warning" }
+                : { bar: "from-primary", iconWrap: "bg-primary/10 text-primary" };
+          return (
+            <div
+              key={key}
+              style={{ "--glow": toneVar } as React.CSSProperties}
+              className="glow-card group relative overflow-hidden rounded-xl border bg-card p-3.5 transition-all duration-200 hover:-translate-y-0.5"
+            >
               <span
-                className={
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-md " +
-                  (tone === "destructive"
-                    ? "bg-destructive/10 text-destructive"
-                    : tone === "warning"
-                      ? "bg-warning/10 text-warning"
-                      : "bg-primary/10 text-primary")
-                }
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </span>
+                className={cn(
+                  "absolute inset-x-0 top-0 h-1 bg-gradient-to-r to-transparent",
+                  toneClass.bar,
+                )}
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
+                    toneClass.iconWrap,
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="mt-2 text-2xl font-semibold tabular-nums">{indicators[key]}</p>
             </div>
-            <p className="mt-2 text-2xl font-semibold tabular-nums">{indicators[key]}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="grid gap-4">

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/guards";
 import { assertProjectAccess } from "@/lib/auth/project-access";
 import { PERMISSIONS } from "@/lib/constants/permissions";
-import { listProjects } from "@/core/services/project.service";
 import {
   getDashboardIndicators,
   getStatusDistribution,
@@ -24,11 +23,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     await assertProjectAccess(session, projectId);
   }
 
-  const [indicators, distribution, alerts, projects] = await Promise.all([
+  const [indicators, distribution, alerts] = await Promise.all([
     getDashboardIndicators(session, projectId),
     getStatusDistribution(session, projectId),
     getLiveAlerts(session, projectId),
-    listProjects(session),
   ]);
 
   return (
@@ -36,8 +34,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       indicators={indicators}
       distribution={distribution}
       alerts={alerts}
-      projects={projects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
-      currentProjectId={projectId ?? ""}
       userName={session.user.name ?? ""}
     />
   );

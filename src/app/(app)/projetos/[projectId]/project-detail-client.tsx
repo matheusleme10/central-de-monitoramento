@@ -338,8 +338,38 @@ export function ProjectDetailClient({
             spreadsheets.map((spreadsheet) => {
               const status = aggregateStatus(spreadsheet.sheets, latestEventBySheet);
               const isCollapsed = collapsed.has(spreadsheet.id);
+              const toneVar =
+                status.variant === "destructive"
+                  ? "var(--destructive)"
+                  : status.variant === "warning"
+                    ? "var(--warning)"
+                    : status.variant === "info"
+                      ? "var(--info)"
+                      : status.variant === "success"
+                        ? "var(--success)"
+                        : "var(--border)";
+              const barClass =
+                status.variant === "destructive"
+                  ? "from-destructive"
+                  : status.variant === "warning"
+                    ? "from-warning"
+                    : status.variant === "info"
+                      ? "from-info"
+                      : status.variant === "success"
+                        ? "from-success"
+                        : "from-border";
               return (
-                <div key={spreadsheet.id} className="rounded-lg border border-border bg-card">
+                <div
+                  key={spreadsheet.id}
+                  style={{ "--glow": toneVar } as React.CSSProperties}
+                  className="glow-card group relative overflow-hidden rounded-xl border bg-card transition-all duration-200"
+                >
+                  <span
+                    className={cn(
+                      "absolute inset-x-0 top-0 h-1 bg-gradient-to-r to-transparent",
+                      barClass,
+                    )}
+                  />
                   <div className="flex flex-wrap items-center gap-3 p-4">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                       <SheetIcon className="h-4 w-4" />

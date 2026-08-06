@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Command as CommandPrimitive } from "cmdk";
 import { AlertTriangle, FolderKanban, Loader2, Search, Sheet as SheetIcon, User, X } from "lucide-react";
 
 import {
   Command,
-  CommandInput,
   CommandList,
   CommandEmpty,
   CommandGroup,
@@ -144,19 +144,18 @@ export function GlobalSearch() {
       <Command shouldFilter={false} className="overflow-visible bg-transparent">
         <div
           className={cn(
-            "flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors",
-            showPanel && "rounded-b-none border-b-transparent",
+            "flex h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 shadow-sm transition-colors",
+            showPanel ? "rounded-b-none border-b-transparent" : "focus-within:ring-2 focus-within:ring-ring",
           )}
-          cmdk-input-wrapper=""
         >
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <CommandInput
+          <CommandPrimitive.Input
             ref={inputRef}
             value={query}
             onValueChange={setQuery}
             onFocus={() => setOpen(true)}
             placeholder="Pesquisar projeto, planilha, aba, responsável, erro, tag..."
-            className="h-9 border-0 px-0 py-0 focus:ring-0"
+            className="h-full flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           {isLoading && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
           {query && !isLoading && (

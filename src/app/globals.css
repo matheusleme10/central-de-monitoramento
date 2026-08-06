@@ -138,12 +138,48 @@
 }
 
 body {
-  background: hsl(var(--background));
+  background:
+    radial-gradient(1100px circle at 12% -10%, hsl(var(--primary) / 0.10), transparent 55%),
+    radial-gradient(900px circle at 100% 0%, hsl(var(--info) / 0.07), transparent 50%),
+    radial-gradient(700px circle at 0% 100%, hsl(var(--primary) / 0.05), transparent 45%),
+    hsl(var(--background));
+  background-attachment: fixed;
   color: hsl(var(--foreground));
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
+}
+
+/* -----------------------------------------------------------------------
+ * Glow utilitário — usado em cards de destaque (indicadores, planilhas) pra
+ * dar uma "vida" ao layout com borda + sombra coloridas discretas, no
+ * espírito neon/degradê pedido. `--glow` é a cor (token HSL) que cada
+ * instância define via style inline.
+ * ---------------------------------------------------------------------*/
+.glow-card {
+  position: relative;
+  border-color: hsl(var(--glow, var(--border)) / 0.35);
+  box-shadow:
+    0 0 0 1px hsl(var(--glow, var(--border)) / 0.12),
+    0 10px 28px -14px hsl(var(--glow, var(--border)) / 0.55);
+}
+
+.glow-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0.5;
+  background: radial-gradient(120px circle at 15% 0%, hsl(var(--glow, var(--primary)) / 0.16), transparent 70%);
+}
+
+.glow-card:hover {
+  border-color: hsl(var(--glow, var(--border)) / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(var(--glow, var(--border)) / 0.2),
+    0 16px 36px -14px hsl(var(--glow, var(--border)) / 0.7);
 }
 
 /* -----------------------------------------------------------------------

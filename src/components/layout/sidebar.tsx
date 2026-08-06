@@ -36,7 +36,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar md:flex md:flex-col">
       <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-6">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_0_16px_-2px_hsl(var(--primary)/0.65)]">
           <span className="h-2 w-2 rounded-full bg-primary-foreground" />
         </span>
         <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
@@ -54,7 +54,8 @@ export function Sidebar() {
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-md border-l-2 border-transparent px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground",
-                isActive && "border-primary bg-accent font-semibold text-accent-foreground",
+                isActive &&
+                  "border-primary bg-accent font-semibold text-accent-foreground shadow-[inset_2px_0_8px_-4px_hsl(var(--primary)/0.5)]",
               )}
             >
               <Icon className={cn("h-4 w-4", isActive && "text-primary")} />
