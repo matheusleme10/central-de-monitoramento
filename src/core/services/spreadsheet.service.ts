@@ -31,7 +31,11 @@ export async function getSpreadsheetById(spreadsheetId: string) {
     where: { id: spreadsheetId, deletedAt: null },
     include: {
       project: { select: { id: true, name: true } },
-      sheets: { where: { deletedAt: null }, orderBy: { name: "asc" }, include: { responsible: true } },
+      sheets: {
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+        include: { responsible: true, schedule: true },
+      },
     },
   });
 }

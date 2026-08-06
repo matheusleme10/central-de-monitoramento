@@ -15,6 +15,16 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_ROUTES = ["/login"];
 const PUBLIC_PREFIXES = ["/api/auth"];
 
+/**
+ * Rotas autenticadas por API Token (header `Authorization: Bearer`), não
+ * por cookie de sessão — usadas pelo Apps Script/Python/etc, que nunca tem
+ * cookie de navegador. Sem esta lista, o middleware redirecionava (307)
+ * essas chamadas pra `/login`, e como `/login` só responde GET, o
+ * redirect virava um 405 pro caller. A validação do token em si continua
+ * acontecendo dentro da própria rota, via `authenticateApiToken`.
+ */
+const API_TOKEN_PREFIXES = ["/api/v1/updates"];
+
 const SESSION_COOKIE_NAMES = [
   "__Secure-authjs.session-token",
   "authjs.session-token",
@@ -27,7 +37,9 @@ export function middleware(req: NextRequest) {
     PUBLIC_ROUTES.includes(pathname) ||
     PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  if (isPublic) return NextResponse.next();
+  const isApiTokenRoute = API_TOKEN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+  if (isPublic || isApiTokenRoute) return NextResponse.next();
 
   const hasSessionCookie = SESSION_COOKIE_NAMES.some((name) =>
     req.cookies.has(name),
