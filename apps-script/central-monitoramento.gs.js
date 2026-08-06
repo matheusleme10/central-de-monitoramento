@@ -1,263 +1,96 @@
 /**
- * Biblioteca reutilizável para Apps Script — Central de Monitoramento de Atualizações
- * ---------------------------------------------------------------------------
- * Cole este arquivo em qualquer projeto de Apps Script vinculado a uma
- * planilha monitorada (Extensões → Apps Script → arquivo novo → colar).
+ * Central de Monitoramento — biblioteca para Apps Script.
  *
- * IMPORTANTE: nenhuma chamada desta biblioteca pode travar ou interromper
- * a atualização real da planilha. Por isso, toda comunicação com o painel
- * é envolvida em try/catch e falhas são apenas registradas no Logger —
- * nunca relançadas. Se o painel estiver fora do ar, seu script continua
- * funcionando normalmente.
+ * O QUE ISSO FAZ: só LÊ a planilha e AVISA o painel se está atualizada ou
+ * não. Não escreve nada, não mexe em fórmulas/dados, não substitui nenhum
+ * script/Python/Coefficient que você já tem atualizando a planilha — roda
+ * em paralelo, sozinho, num trigger de tempo separado.
  *
- * CONFIGURAÇÃO
- * Preencha as Propriedades do Script (Editor → Configurações do projeto →
- * Propriedades do script) com:
- *   CMA_PANEL_URL    -> ex.: https://central.suaempresa.com
- *   CMA_API_TOKEN    -> token gerado na tela do Projeto ("Tokens de API")
- *   CMA_PROJECT_ID   -> UUID do projeto no painel
+ * INSTALAÇÃO (uma vez por planilha):
+ *   1. Extensões → Apps Script → cole este arquivo inteiro.
+ *   2. Editor → ⚙️ Configurações do projeto → Propriedades do Script → adicione:
+ *        CMA_PANEL_URL   = https://seu-painel.vercel.app
+ *        CMA_API_TOKEN   = token gerado em Projeto → Tokens de API no painel
+ *        CMA_PROJECT_ID  = UUID do projeto (mesma tela)
+ *   3. Edite a função `verificarAbasPassivamente` no fim deste arquivo com
+ *      os nomes das abas desta planilha (seção "CONFIGURE AQUI").
+ *   4. Editor → 🕐 Acionadores → Adicionar acionador → função
+ *      `verificarAbasPassivamente` → baseado em tempo → a cada 30 min.
  *
- * Existem DOIS jeitos de reportar uma atualização — use o que fizer
- * sentido para cada aba:
+ * Pra copiar pra outra planilha do MESMO projeto: repita os passos 1-4,
+ * as Propriedades do Script são as mesmas (CMA_PROJECT_ID não muda) — só
+ * troca a lista de abas no passo 3.
  *
- * ---------------------------------------------------------------------
- * MODO 1 — ATIVO: seu código sabe quando a atualização começa/termina
- * ---------------------------------------------------------------------
- * Use isto se a própria atualização da planilha roda via Apps Script
- * (função que você já tem, disparada por trigger ou manualmente).
+ * Como decide "atualizado ou não": pra cada aba configurada, procura uma
+ * coluna de data (ex.: "Data", "Atualizado em") e usa a maior data
+ * encontrada. Sem coluna de data, usa a data de modificação do arquivo no
+ * Drive. Isso funciona com qualquer fonte de atualização — Apps Script,
+ * Python, Coefficient, edição manual — porque não depende de quem
+ * atualizou, só olha o resultado.
  *
- *   function atualizarPlanilha() {
- *     var sheet = SpreadsheetApp.getActiveSheet();
- *     var run = CentralMonitoramento.startExecution(sheet);
- *     try {
- *       var linhas = fazerAtualizacao_(); // sua lógica de atualização
- *       run.success(linhas);
- *     } catch (err) {
- *       run.error(err);
- *       throw err; // opcional: propague se quiser que o Apps Script marque falha
- *     }
- *   }
- *
- * Para cancelamento explícito (ex.: usuário interrompeu um fluxo manual):
- *   run.cancelled("Cancelado pelo usuário");
- *
- * Se a atualização é feita por Python, Coalesce ou qualquer outra coisa
- * fora do Apps Script, dá pra chamar `POST /api/v1/updates` diretamente
- * (mesmo endpoint, ver README/docs da API) — não precisa desta biblioteca.
- *
- * ---------------------------------------------------------------------
- * MODO 2 — PASSIVO: você não controla quem atualiza a planilha
- * ---------------------------------------------------------------------
- * Use isto quando a planilha é atualizada por algo que você não
- * consegue (ou não quer) instrumentar com uma chamada de API — por
- * exemplo, um job de Coalesce/Python que só escreve na planilha, sem
- * avisar ninguém. Em vez de esperar ser avisado, este modo roda de
- * tempos em tempos (trigger de tempo do Apps Script) e verifica o
- * resultado sozinho:
- *
- *   1. Se a aba tem uma coluna de data (ex.: "Data", "Atualizado em"),
- *      usa a MAIOR data encontrada nessa coluna como "última
- *      atualização" — reflete quando os dados em si foram gerados, não
- *      quando alguém editou a planilha.
- *   2. Se não tem coluna de data (ou não configurada), cai para a data
- *      de última modificação do ARQUIVO inteiro no Google Drive — menos
- *      preciso (é o arquivo todo, não a aba específica), mas funciona
- *      sem nenhuma configuração.
- *
- * Configuração (edite a lista abaixo com suas abas):
- *
- *   function verificarAbasPassivamente() {
- *     CentralMonitoramento.checkSheet(
- *       SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Vendas"),
- *       { dateColumn: "Data do Pedido" } // nome do cabeçalho da coluna
- *     );
- *     CentralMonitoramento.checkSheet(
- *       SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Estoque")
- *       // sem dateColumn: cai automático para a data do arquivo
- *     );
- *   }
- *
- * Depois, configure um trigger de tempo pra rodar essa função sozinha:
- * Editor do Apps Script → relógio (Triggers) → Adicionar acionador →
- * escolha a função (`verificarAbasPassivamente`) → tipo "Baseado em
- * tempo" → de tempo em tempo (ex.: a cada 30 minutos). A partir daí,
- * roda sozinho, sem precisar abrir a planilha.
+ * Também existe um Modo 1 (ativo), pra quando a própria atualização roda
+ * via Apps Script e quer avisar o início/fim exato — ver
+ * `CentralMonitoramento.startExecution` no fim do arquivo.
  */
 
 var CentralMonitoramento = (function () {
-  function getConfig_() {
-    var props = PropertiesService.getScriptProperties();
+  function config_() {
+    var p = PropertiesService.getScriptProperties();
     return {
-      panelUrl: props.getProperty("CMA_PANEL_URL"),
-      apiToken: props.getProperty("CMA_API_TOKEN"),
-      projectId: props.getProperty("CMA_PROJECT_ID"),
+      panelUrl: p.getProperty("CMA_PANEL_URL"),
+      apiToken: p.getProperty("CMA_API_TOKEN"),
+      projectId: p.getProperty("CMA_PROJECT_ID"),
     };
   }
 
-  /** Envia um evento ao painel. Nunca lança exceção — apenas loga falhas. */
+  // Envia um evento ao painel. Nunca lança erro — só loga falhas, pra
+  // nunca travar seu script caso o painel esteja fora do ar.
   function send_(payload) {
-    var config = getConfig_();
-
-    if (!config.panelUrl || !config.apiToken || !config.projectId) {
-      Logger.log(
-        "[CentralMonitoramento] Configuração ausente (CMA_PANEL_URL / CMA_API_TOKEN / " +
-          "CMA_PROJECT_ID) — evento não enviado, mas a execução continua normalmente."
-      );
+    var cfg = config_();
+    if (!cfg.panelUrl || !cfg.apiToken || !cfg.projectId) {
+      Logger.log("[CentralMonitoramento] Propriedades do Script ausentes — nada enviado.");
       return;
     }
-
     try {
-      var response = UrlFetchApp.fetch(config.panelUrl.replace(/\/$/, "") + "/api/v1/updates", {
+      var res = UrlFetchApp.fetch(cfg.panelUrl.replace(/\/$/, "") + "/api/v1/updates", {
         method: "post",
         contentType: "application/json",
-        headers: { Authorization: "Bearer " + config.apiToken },
+        headers: { Authorization: "Bearer " + cfg.apiToken },
         payload: JSON.stringify(payload),
         muteHttpExceptions: true,
-        followRedirects: true,
       });
-
-      var status = response.getResponseCode();
-      if (status >= 400) {
-        Logger.log(
-          "[CentralMonitoramento] Painel respondeu " + status + ": " + response.getContentText()
-        );
+      if (res.getResponseCode() >= 400) {
+        Logger.log("[CentralMonitoramento] Painel respondeu " + res.getResponseCode() + ": " + res.getContentText());
       }
-    } catch (networkError) {
-      // Painel indisponível, DNS falhou, timeout, etc. — nunca propaga.
-      Logger.log("[CentralMonitoramento] Falha ao contatar o painel: " + networkError);
+    } catch (e) {
+      Logger.log("[CentralMonitoramento] Falha ao contatar o painel: " + e);
     }
   }
 
-  /**
-   * MODO 1 (ativo). Inicia o rastreamento de uma execução para a aba
-   * informada. Retorna um objeto com success()/error()/cancelled() para
-   * fechar o evento.
-   */
-  function startExecution(sheet, options) {
-    options = options || {};
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var executionId = options.executionId || Utilities.getUuid();
-    var startedAt = new Date();
-
-    var context = {
-      projectId: getConfig_().projectId,
-      spreadsheetId: spreadsheet.getId(),
-      spreadsheetName: spreadsheet.getName(),
-      sheetId: sheet.getSheetId(),
-      sheetName: sheet.getName(),
-      executionId: executionId,
-      startedAt: startedAt.toISOString(),
-    };
-
-    send_(merge_(context, { status: "RUNNING" }));
-
-    return {
-      executionId: executionId,
-
-      success: function (rowsProcessed) {
-        var finishedAt = new Date();
-        send_(
-          merge_(context, {
-            status: "SUCCESS",
-            finishedAt: finishedAt.toISOString(),
-            duration: finishedAt.getTime() - startedAt.getTime(),
-            rowsProcessed: rowsProcessed,
-          })
-        );
-      },
-
-      error: function (err, errorCode) {
-        var finishedAt = new Date();
-        var message = err && err.message ? err.message : String(err);
-        send_(
-          merge_(context, {
-            status: "ERROR",
-            finishedAt: finishedAt.toISOString(),
-            duration: finishedAt.getTime() - startedAt.getTime(),
-            message: message,
-            errorCode: errorCode || undefined,
-          })
-        );
-      },
-
-      cancelled: function (message) {
-        var finishedAt = new Date();
-        send_(
-          merge_(context, {
-            status: "CANCELLED",
-            finishedAt: finishedAt.toISOString(),
-            duration: finishedAt.getTime() - startedAt.getTime(),
-            message: message,
-          })
-        );
-      },
-    };
+  function merge_(a, b) {
+    var out = {};
+    for (var k in a) out[k] = a[k];
+    for (var k2 in b) out[k2] = b[k2];
+    return out;
   }
 
-  /**
-   * MODO 2 (passivo) — versão em lote. Verifica várias abas da planilha
-   * ativa de uma vez, a partir de uma lista simples. É a forma mais fácil
-   * de copiar este script para outra planilha: cole o arquivo inteiro,
-   * ajuste as Propriedades do Script (CMA_PROJECT_ID muda por projeto;
-   * CMA_PANEL_URL/CMA_API_TOKEN geralmente são os mesmos) e troque só a
-   * lista abaixo pelos nomes das abas desta planilha.
-   *
-   *   function verificarAbasPassivamente() {
-   *     CentralMonitoramento.checkSheets([
-   *       { name: "Vendas", dateColumn: "Data do Pedido" },
-   *       { name: "Estoque" },              // sem dateColumn -> usa data do arquivo
-   *       { name: "Datalake" },
-   *     ]);
-   *   }
-   *
-   * Cada item aceita os mesmos campos de `checkSheet` (dateColumn,
-   * rowsProcessed). Abas com nome que não existir na planilha são
-   * ignoradas (com log), em vez de quebrar as demais.
-   */
-  function checkSheets(configs) {
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var results = [];
-    for (var i = 0; i < configs.length; i++) {
-      var cfg = configs[i] || {};
-      var sheet = spreadsheet.getSheetByName(cfg.name);
-      if (!sheet) {
-        Logger.log("[CentralMonitoramento] Aba não encontrada nesta planilha: " + cfg.name);
-        continue;
-      }
-      results.push(checkSheet(sheet, cfg));
-    }
-    return results;
-  }
-
-  /**
-   * MODO 2 (passivo). Verifica uma aba sem depender de ninguém avisar o
-   * início/fim de uma atualização.
-   *
-   * options.dateColumn (opcional):
-   *   - nome do cabeçalho da coluna de data (ex.: "Data", "Atualizado em")
-   *   - ou a letra da coluna (ex.: "B"), se preferir fixar por posição
-   *   - se omitido, tenta achar automaticamente uma coluna com um destes
-   *     cabeçalhos: Data, Date, Atualizado em, Última atualização
-   *   - se nada for encontrado, cai para a data de modificação do
-   *     arquivo inteiro (DriveApp) — sempre funciona, mesmo sem
-   *     configuração nenhuma.
-   */
+  // Verifica uma única aba (objeto Sheet do Apps Script) e reporta o status.
+  // options.dateColumn: nome do cabeçalho da coluna de data, ou a letra da
+  // coluna (ex.: "B"). Sem isso, tenta achar sozinho (Data/Date/Atualizado
+  // em/Última atualização); se não achar, cai pra data do arquivo no Drive.
   function checkSheet(sheet, options) {
     options = options || {};
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var executionId = options.executionId || Utilities.getUuid();
-
     var context = {
-      projectId: getConfig_().projectId,
+      projectId: config_().projectId,
       spreadsheetId: spreadsheet.getId(),
       spreadsheetName: spreadsheet.getName(),
       sheetId: sheet.getSheetId(),
       sheetName: sheet.getName(),
-      executionId: executionId,
+      executionId: options.executionId || Utilities.getUuid(),
     };
 
     var detected = detectLastUpdate_(sheet, spreadsheet, options.dateColumn);
-
     send_(
       merge_(context, {
         status: "SUCCESS",
@@ -265,81 +98,72 @@ var CentralMonitoramento = (function () {
         finishedAt: detected.date.toISOString(),
         rowsProcessed: options.rowsProcessed || detected.rowsProcessed,
         message: detected.message,
-      })
+      }),
     );
-
     return detected;
   }
 
-  var DEFAULT_DATE_HEADERS_ = [
-    "data",
-    "date",
-    "atualizado em",
-    "ultima atualizacao",
-    "última atualização",
-  ];
+  // Verifica uma lista de abas de uma vez — ver `verificarAbasPassivamente`
+  // no fim do arquivo pra exemplo de uso.
+  function checkSheets(configs) {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var results = [];
+    for (var i = 0; i < configs.length; i++) {
+      var cfg = configs[i] || {};
+      var sheet = spreadsheet.getSheetByName(cfg.name);
+      if (!sheet) {
+        Logger.log("[CentralMonitoramento] Aba não encontrada: " + cfg.name);
+        continue;
+      }
+      results.push(checkSheet(sheet, cfg));
+    }
+    return results;
+  }
+
+  var DATE_HEADERS_ = ["data", "date", "atualizado em", "ultima atualizacao", "última atualização"];
 
   function detectLastUpdate_(sheet, spreadsheet, dateColumn) {
-    var range = sheet.getDataRange();
-    var values = range.getValues();
+    var values = sheet.getDataRange().getValues();
     var lastRow = values.length;
 
     if (lastRow > 1) {
-      var headerRow = values[0];
-      var columnIndex = -1;
+      var header = values[0];
+      var col = dateColumn
+        ? /^[A-Za-z]{1,2}$/.test(dateColumn)
+          ? columnLetterToIndex_(dateColumn)
+          : findHeaderIndex_(header, [dateColumn])
+        : findHeaderIndex_(header, DATE_HEADERS_);
 
-      if (dateColumn) {
-        // Letra de coluna fixa (ex.: "B") tem prioridade se for isso que
-        // foi passado; senão, procura pelo nome do cabeçalho.
-        if (/^[A-Za-z]{1,2}$/.test(dateColumn)) {
-          columnIndex = columnLetterToIndex_(dateColumn);
-        } else {
-          columnIndex = findHeaderIndex_(headerRow, [dateColumn]);
-        }
-      } else {
-        columnIndex = findHeaderIndex_(headerRow, DEFAULT_DATE_HEADERS_);
-      }
-
-      if (columnIndex >= 0) {
+      if (col >= 0) {
         var maxDate = null;
         for (var i = 1; i < lastRow; i++) {
-          var cell = values[i][columnIndex];
-          var cellDate = cell instanceof Date ? cell : null;
-          if (cellDate && (!maxDate || cellDate.getTime() > maxDate.getTime())) {
-            maxDate = cellDate;
-          }
+          var cell = values[i][col];
+          if (cell instanceof Date && (!maxDate || cell > maxDate)) maxDate = cell;
         }
         if (maxDate) {
           return {
             date: maxDate,
             rowsProcessed: lastRow - 1,
-            message:
-              "Detectado via coluna de data '" + headerRow[columnIndex] + "' (maior data encontrada)",
+            message: "Detectado via coluna '" + header[col] + "'",
           };
         }
-        Logger.log(
-          "[CentralMonitoramento] Coluna de data encontrada mas sem valores de data válidos — usando data do arquivo."
-        );
       }
     }
 
-    // Fallback: nenhuma coluna de data configurada/encontrada/preenchida
-    // — usa a última modificação do arquivo inteiro no Drive.
+    // Sem coluna de data (ou vazia) — usa a última modificação do arquivo.
     var file = DriveApp.getFileById(spreadsheet.getId());
     return {
       date: file.getLastUpdated(),
       rowsProcessed: Math.max(lastRow - 1, 0),
-      message: "Nenhuma coluna de data encontrada — usando última modificação do arquivo (Drive)",
+      message: "Sem coluna de data — usando última modificação do arquivo",
     };
   }
 
   function findHeaderIndex_(headerRow, candidates) {
     for (var i = 0; i < headerRow.length; i++) {
-      var header = String(headerRow[i] || "").trim().toLowerCase();
+      var h = String(headerRow[i] || "").trim().toLowerCase();
       for (var j = 0; j < candidates.length; j++) {
-        if (header === String(candidates[j]).trim().toLowerCase()) {
-          return i;
-        }
+        if (h === String(candidates[j]).trim().toLowerCase()) return i;
       }
     }
     return -1;
@@ -348,22 +172,57 @@ var CentralMonitoramento = (function () {
   function columnLetterToIndex_(letter) {
     letter = letter.toUpperCase();
     var index = 0;
-    for (var i = 0; i < letter.length; i++) {
-      index = index * 26 + (letter.charCodeAt(i) - 64);
-    }
-    return index - 1; // 0-based
+    for (var i = 0; i < letter.length; i++) index = index * 26 + (letter.charCodeAt(i) - 64);
+    return index - 1;
   }
 
-  function merge_(a, b) {
-    var result = {};
-    for (var k in a) result[k] = a[k];
-    for (var k2 in b) result[k2] = b[k2];
-    return result;
+  // Modo 1 (ativo) — use só se a própria atualização roda via Apps Script
+  // e você quer marcar início/fim exatos:
+  //   var run = CentralMonitoramento.startExecution(sheet);
+  //   try { ...sua lógica...; run.success(linhas); }
+  //   catch (e) { run.error(e); throw e; }
+  function startExecution(sheet, options) {
+    options = options || {};
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var startedAt = new Date();
+    var context = {
+      projectId: config_().projectId,
+      spreadsheetId: spreadsheet.getId(),
+      spreadsheetName: spreadsheet.getName(),
+      sheetId: sheet.getSheetId(),
+      sheetName: sheet.getName(),
+      executionId: options.executionId || Utilities.getUuid(),
+      startedAt: startedAt.toISOString(),
+    };
+    send_(merge_(context, { status: "RUNNING" }));
+
+    return {
+      executionId: context.executionId,
+      success: function (rowsProcessed) {
+        var t = new Date();
+        send_(merge_(context, { status: "SUCCESS", finishedAt: t.toISOString(), duration: t - startedAt, rowsProcessed: rowsProcessed }));
+      },
+      error: function (err, errorCode) {
+        var t = new Date();
+        send_(merge_(context, { status: "ERROR", finishedAt: t.toISOString(), duration: t - startedAt, message: err && err.message ? err.message : String(err), errorCode: errorCode }));
+      },
+      cancelled: function (message) {
+        var t = new Date();
+        send_(merge_(context, { status: "CANCELLED", finishedAt: t.toISOString(), duration: t - startedAt, message: message }));
+      },
+    };
   }
 
-  return {
-    startExecution: startExecution,
-    checkSheet: checkSheet,
-    checkSheets: checkSheets,
-  };
+  return { checkSheet: checkSheet, checkSheets: checkSheets, startExecution: startExecution };
 })();
+
+// ============================================================
+// CONFIGURE AQUI — troque pelos nomes das abas desta planilha.
+// dateColumn é opcional (sem ele, detecta sozinho ou usa a data do arquivo).
+// ============================================================
+function verificarAbasPassivamente() {
+  CentralMonitoramento.checkSheets([
+    { name: "Vendas", dateColumn: "Data do Pedido" },
+    { name: "Estoque" },
+  ]);
+}

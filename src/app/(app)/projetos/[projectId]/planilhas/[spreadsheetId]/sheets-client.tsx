@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUpDown, ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/monitoring/status-badge";
@@ -54,6 +54,8 @@ const sheetSchema = z.object({
   name: z.string().trim().min(1, "Nome é obrigatório").max(200),
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
+  responsibleName: z.string().trim().max(200).optional().or(z.literal("")),
+  responsibleEmail: z.string().trim().email("E-mail inválido").optional().or(z.literal("")),
   url: z.string().trim().url("Informe a URL direta da aba"),
 });
 type SheetFormValues = z.infer<typeof sheetSchema>;
@@ -61,6 +63,8 @@ type SheetFormValues = z.infer<typeof sheetSchema>;
 const editSheetSchema = z.object({
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
+  responsibleName: z.string().trim().max(200).optional().or(z.literal("")),
+  responsibleEmail: z.string().trim().email("E-mail inválido").optional().or(z.literal("")),
 });
 type EditSheetFormValues = z.infer<typeof editSheetSchema>;
 
@@ -71,6 +75,7 @@ interface SheetRow {
   friendlyName: string | null;
   description: string | null;
   url: string;
+  responsible: { id: string; name: string; email: string } | null;
 }
 
 interface SpreadsheetData {
@@ -98,6 +103,13 @@ export function SheetsClient({
   const [sheets, setSheets] = useState(spreadsheet.sheets);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editing, setEditing] = useState<SheetRow | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const sortedSheets = [...sheets].sort((a, b) => {
+    const nameA = (a.friendlyName || a.name).toLowerCase();
+    const nameB = (b.friendlyName || b.name).toLowerCase();
+    return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+  });
 
   const {
     register,
@@ -201,6 +213,19 @@ export function SheetsClient({
                     <Input id="gid" placeholder="0" {...register("gid")} />
                     {errors.gid && <p className="text-xs text-destructive">{errors.gid.message}</p>}
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="responsibleName">Responsável (nome)</Label>
+                      <Input id="responsibleName" placeholder="Bruna Alves" {...register("responsibleName")} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="responsibleEmail">Responsável (e-mail)</Label>
+                      <Input id="responsibleEmail" placeholder="bruna@empresa.com" {...register("responsibleEmail")} />
+                      {errors.responsibleEmail && (
+                        <p className="text-xs text-destructive">{errors.responsibleEmail.message}</p>
+                      )}
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="url">URL direta da aba</Label>
                     <Input
@@ -230,14 +255,24 @@ export function SheetsClient({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>
+                    <button
+                      type="button"
+                      onClick={() => setSortAsc((prev) => !prev)}
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                    >
+                      Nome
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                    </button>
+                  </TableHead>
                   <TableHead>GID</TableHead>
+                  <TableHead>Responsável</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sheets.map((sheet) => (
+                {sortedSheets.map((sheet) => (
                   <TableRow key={sheet.id}>
                     <TableCell className="font-medium">
                       <Link
@@ -253,6 +288,16 @@ export function SheetsClient({
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{sheet.gid}</TableCell>
+                    <TableCell>
+                      {sheet.responsible ? (
+                        <div>
+                          <p className="text-sm">{sheet.responsible.name}</p>
+                          <p className="text-xs text-muted-foreground">{sheet.responsible.email}</p>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={latestStatusBySheet[sheet.id]} />
                     </TableCell>
@@ -339,6 +384,8 @@ function EditSheetDialogContent({
     defaultValues: {
       friendlyName: sheet.friendlyName ?? "",
       description: sheet.description ?? "",
+      responsibleName: sheet.responsible?.name ?? "",
+      responsibleEmail: sheet.responsible?.email ?? "",
     },
   });
 
@@ -375,6 +422,16 @@ function EditSheetDialogContent({
             placeholder="Ex.: Base de pedidos consolidada, atualizada diariamente pelo job do Coalesce..."
             {...register("description")}
           />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <Label htmlFor="edit-responsibleName">Responsável (nome)</Label>
+            <Input id="edit-responsibleName" placeholder="Bruna Alves" {...register("responsibleName")} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-responsibleEmail">Responsável (e-mail)</Label>
+            <Input id="edit-responsibleEmail" placeholder="bruna@empresa.com" {...register("responsibleEmail")} />
+          </div>
         </div>
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting}>

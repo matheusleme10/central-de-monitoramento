@@ -15,6 +15,7 @@ import {
   Sheet as SheetIcon,
   ChevronDown,
   History,
+  ArrowUpDown,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ interface SheetSummary {
   friendlyName: string | null;
   description: string | null;
   url: string;
+  responsible: { id: string; name: string; email: string } | null;
 }
 
 interface LatestEventInfo {
@@ -200,6 +202,16 @@ export function ProjectDetailClient({
     });
   }
 
+  const [sortAsc, setSortAsc] = useState(true);
+
+  function byName(a: { name: string; friendlyName: string | null }, b: { name: string; friendlyName: string | null }) {
+    const nameA = (a.friendlyName || a.name).toLowerCase();
+    const nameB = (b.friendlyName || b.name).toLowerCase();
+    return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+  }
+
+  const sortedSpreadsheets = [...spreadsheets].sort(byName);
+
   const {
     register,
     handleSubmit,
@@ -287,7 +299,17 @@ export function ProjectDetailClient({
             <CardTitle>Planilhas</CardTitle>
             <CardDescription>Planilhas do Google Sheets vinculadas a este projeto</CardDescription>
           </div>
-          {canWrite && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setSortAsc((prev) => !prev)}
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Nome
+            </Button>
+            {canWrite && (
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2">
@@ -327,7 +349,8 @@ export function ProjectDetailClient({
                 </form>
               </DialogContent>
             </Dialog>
-          )}
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {spreadsheets.length === 0 ? (
@@ -335,7 +358,8 @@ export function ProjectDetailClient({
               Nenhuma planilha cadastrada.
             </p>
           ) : (
-            spreadsheets.map((spreadsheet) => {
+            sortedSpreadsheets.map((spreadsheet) => {
+              const sortedSheets = [...spreadsheet.sheets].sort(byName);
               const status = aggregateStatus(spreadsheet.sheets, latestEventBySheet);
               const isCollapsed = collapsed.has(spreadsheet.id);
               const toneVar =
@@ -435,7 +459,17 @@ export function ProjectDetailClient({
                       <Table>
                         <TableHeader>
                           <TableRow className="border-t border-border hover:bg-transparent">
-                            <TableHead>Aba</TableHead>
+                            <TableHead>
+                              <button
+                                type="button"
+                                onClick={() => setSortAsc((prev) => !prev)}
+                                className="inline-flex items-center gap-1 hover:text-foreground"
+                              >
+                                Aba
+                                <ArrowUpDown className="h-3.5 w-3.5" />
+                              </button>
+                            </TableHead>
+                            <TableHead>Responsável</TableHead>
                             <TableHead>Linhas</TableHead>
                             <TableHead>Atualização</TableHead>
                             <TableHead>Status</TableHead>
@@ -443,7 +477,7 @@ export function ProjectDetailClient({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {spreadsheet.sheets.map((sheet) => {
+                          {sortedSheets.map((sheet) => {
                             const event = latestEventBySheet[sheet.id];
                             return (
                               <TableRow key={sheet.id}>
@@ -454,6 +488,9 @@ export function ProjectDetailClient({
                                       {sheet.description}
                                     </p>
                                   )}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {sheet.responsible ? sheet.responsible.name : "—"}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">
                                   {event?.rowsProcessed ?? "—"}

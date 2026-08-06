@@ -234,12 +234,14 @@ model Sheet {
   name          String
   friendlyName  String?   @map("friendly_name")
   description   String?   @db.Text // O que esta aba contém (tipo "Datalake" — dicionário de dados)
+  responsibleId String?   @map("responsible_id") @db.Uuid
   url           String
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
   spreadsheet   Spreadsheet   @relation(fields: [spreadsheetId], references: [id], onDelete: Cascade)
+  responsible   Responsible?  @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
   updateEvents  UpdateEvent[]
   schedules     Schedule[]
   alerts        Alert[]
@@ -247,7 +249,23 @@ model Sheet {
 
   @@unique([spreadsheetId, gid])
   @@index([deletedAt])
+  @@index([responsibleId])
   @@map("sheets")
+}
+
+/// Pessoa responsável por uma aba — só um contato (nome + e-mail), sem
+/// login/permissões no painel. Reaproveitado entre abas pelo e-mail (ver
+/// `findOrCreateResponsible`), então cadastrar "a mesma pessoa" em abas
+/// diferentes não duplica o registro.
+model Responsible {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sheets    Sheet[]
+
+  @@map("responsibles")
 }
 
 enum UpdateStatus {

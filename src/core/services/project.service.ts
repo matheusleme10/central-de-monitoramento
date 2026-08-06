@@ -31,6 +31,7 @@ export async function getProjectById(session: Session, projectId: string) {
           sheets: {
             where: { deletedAt: null },
             orderBy: { name: "asc" },
+            include: { responsible: true },
           },
         },
       },
