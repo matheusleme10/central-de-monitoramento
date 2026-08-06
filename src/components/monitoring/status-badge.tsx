@@ -1,9 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "destructive" | "secondary" | "outline" }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; variant: "success" | "destructive" | "secondary" | "outline" | "warning" | "info" }
+> = {
   SUCCESS: { label: "Sucesso", variant: "success" },
   ERROR: { label: "Erro", variant: "destructive" },
-  RUNNING: { label: "Em andamento", variant: "outline" },
+  RUNNING: { label: "Em andamento", variant: "info" },
   CANCELLED: { label: "Cancelada", variant: "secondary" },
 };
 

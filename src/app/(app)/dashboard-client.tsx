@@ -34,11 +34,11 @@ import { Badge } from "@/components/ui/badge";
 import type { DashboardIndicators, StatusDistributionItem, LiveAlert } from "@/core/services/dashboard.service";
 
 const STATUS_COLORS: Record<string, string> = {
-  SUCCESS: "#22c55e",
-  ERROR: "#ef4444",
-  RUNNING: "#f59e0b",
-  CANCELLED: "#6b7280",
-  NEVER_UPDATED: "#9ca3af",
+  SUCCESS: "hsl(var(--success))",
+  ERROR: "hsl(var(--destructive))",
+  RUNNING: "hsl(var(--info))",
+  CANCELLED: "hsl(var(--muted-foreground))",
+  NEVER_UPDATED: "hsl(var(--muted-foreground))",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -124,21 +124,26 @@ export function DashboardClient({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {INDICATOR_CARDS.map(({ key, label, icon: Icon, tone }) => (
-          <div key={key} className="rounded-md border border-border bg-card p-3">
+          <div
+            key={key}
+            className="rounded-lg border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
+          >
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <Icon
+              <span
                 className={
-                  "h-3.5 w-3.5 " +
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-md " +
                   (tone === "destructive"
-                    ? "text-destructive"
+                    ? "bg-destructive/10 text-destructive"
                     : tone === "warning"
-                      ? "text-amber-500"
-                      : "text-muted-foreground")
+                      ? "bg-warning/10 text-warning"
+                      : "bg-primary/10 text-primary")
                 }
-              />
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </span>
             </div>
-            <p className="mt-1 text-2xl font-semibold">{indicators[key]}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{indicators[key]}</p>
           </div>
         ))}
       </div>
@@ -212,7 +217,7 @@ export function DashboardClient({
                   {alert.type === "ERROR" ? (
                     <XCircle className="h-4 w-4 shrink-0 text-destructive" />
                   ) : (
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
@@ -220,7 +225,7 @@ export function DashboardClient({
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{alert.message}</p>
                   </div>
-                  <Badge variant={alert.severity === "CRITICAL" ? "destructive" : "secondary"}>
+                  <Badge variant={alert.severity === "CRITICAL" ? "destructive" : "warning"}>
                     {alert.severity === "CRITICAL" ? "Crítico" : "Atenção"}
                   </Badge>
                 </Link>
