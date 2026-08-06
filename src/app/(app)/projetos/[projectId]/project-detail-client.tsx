@@ -16,6 +16,10 @@ import {
   ChevronDown,
   History,
   ArrowUpDown,
+  CheckCircle2,
+  AlertTriangle,
+  Circle,
+  KeyRound,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -91,6 +95,7 @@ interface SheetSummary {
   description: string | null;
   url: string;
   responsible: { id: string; name: string; email: string } | null;
+  schedule: { expectedInterval: number | null; isActive: boolean } | null;
 }
 
 interface LatestEventInfo {
@@ -167,6 +172,79 @@ function aggregateStatus(
   if (hasPending) return { label: "Pendente", variant: "warning" };
   if (hasRunning) return { label: "Em andamento", variant: "info" };
   return { label: "Atualizado", variant: "success" };
+}
+
+function isTokenActive(token: ApiTokenRow): boolean {
+  if (token.revokedAt) return false;
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return false;
+  return true;
+}
+
+interface ChecklistSheetRef {
+  id: string;
+  name: string;
+  spreadsheetId: string;
+  spreadsheetLabel: string;
+}
+
+/**
+ * Resumo do que já está configurado pra este projeto aparecer atualizações
+ * no painel — pensado pra responder direto "o que falta fazer": token de
+ * API ativo, abas cadastradas, abas que já receberam ao menos 1 evento
+ * (o principal sinal de que Apps Script/Python/etc está mandando dados
+ * certo) e, secundariamente, responsável/intervalo esperado por aba.
+ */
+function buildConfigChecklist(
+  project: ProjectData,
+  apiTokens: ApiTokenRow[],
+  latestEventBySheet: Record<string, LatestEventInfo>,
+) {
+  const allSheets: ChecklistSheetRef[] = project.spreadsheets.flatMap((sp) =>
+    sp.sheets.map((sheet) => ({
+      id: sheet.id,
+      name: sheet.friendlyName || sheet.name,
+      spreadsheetId: sp.id,
+      spreadsheetLabel: sp.friendlyName || sp.name,
+    })),
+  );
+
+  const allSheetRows = project.spreadsheets.flatMap((sp) => sp.sheets);
+
+  return {
+    activeTokens: apiTokens.filter(isTokenActive).length,
+    totalTokens: apiTokens.length,
+    totalSheets: allSheets.length,
+    sheetsNeverUpdated: allSheets.filter((s) => !latestEventBySheet[s.id]),
+    sheetsWithoutResponsible: allSheetRows.filter((s) => !s.responsible).length,
+    sheetsWithoutSchedule: allSheetRows.filter((s) => !s.schedule?.expectedInterval).length,
+  };
+}
+
+function ChecklistRow({
+  ok,
+  okLabel,
+  pendingLabel,
+  severity = "warning",
+}: {
+  ok: boolean;
+  okLabel: string;
+  pendingLabel: string;
+  severity?: "warning" | "info";
+}) {
+  const Icon = ok ? CheckCircle2 : severity === "warning" ? AlertTriangle : Circle;
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <Icon
+        className={cn(
+          "mt-0.5 h-4 w-4 shrink-0",
+          ok ? "text-success" : severity === "warning" ? "text-warning" : "text-muted-foreground",
+        )}
+      />
+      <span className={ok ? "text-foreground" : "text-muted-foreground"}>
+        {ok ? okLabel : pendingLabel}
+      </span>
+    </div>
+  );
 }
 
 export function ProjectDetailClient({
@@ -284,6 +362,8 @@ export function ProjectDetailClient({
     (u) => !members.some((m) => m.userId === u.id),
   );
 
+  const checklist = buildConfigChecklist(project, apiTokens, latestEventBySheet);
+
   return (
     <div className="space-y-6">
       <div>
@@ -292,6 +372,66 @@ export function ProjectDetailClient({
           <p className="text-sm text-muted-foreground">{project.description}</p>
         )}
       </div>
+
+      <Card className="glow-card" style={{ "--glow": "var(--info)" } as React.CSSProperties}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-muted-foreground" />
+            Status da Configuração
+          </CardTitle>
+          <CardDescription>
+            O que já está pronto para este projeto aparecer atualizações no painel
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {canManageTokens && (
+            <ChecklistRow
+              ok={checklist.activeTokens > 0}
+              okLabel={`${checklist.activeTokens} token${checklist.activeTokens === 1 ? "" : "s"} de API ativo${checklist.activeTokens === 1 ? "" : "s"}`}
+              pendingLabel="Nenhum token de API ativo — crie um na seção de Tokens abaixo pra conectar o Apps Script/Python"
+            />
+          )}
+          <ChecklistRow
+            ok={checklist.totalSheets > 0}
+            okLabel={`${checklist.totalSheets} aba(s) cadastradas`}
+            pendingLabel="Nenhuma aba cadastrada ainda — adicione uma planilha e suas abas acima"
+          />
+          <ChecklistRow
+            ok={checklist.totalSheets > 0 && checklist.sheetsNeverUpdated.length === 0}
+            okLabel="Todas as abas já receberam ao menos uma atualização"
+            pendingLabel={`${checklist.sheetsNeverUpdated.length} de ${checklist.totalSheets} aba(s) nunca receberam nenhuma atualização`}
+          />
+          {checklist.sheetsNeverUpdated.length > 0 && (
+            <div className="ml-6 flex flex-wrap gap-1.5">
+              {checklist.sheetsNeverUpdated.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/projetos/${project.id}/planilhas/${s.spreadsheetId}/abas/${s.id}`}
+                >
+                  <Badge
+                    variant="outline"
+                    className="cursor-pointer font-normal hover:border-warning hover:text-warning"
+                  >
+                    {s.spreadsheetLabel} · {s.name}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+          <ChecklistRow
+            ok={checklist.sheetsWithoutResponsible === 0}
+            okLabel="Todas as abas têm responsável definido"
+            pendingLabel={`${checklist.sheetsWithoutResponsible} aba(s) sem responsável definido`}
+            severity="info"
+          />
+          <ChecklistRow
+            ok={checklist.sheetsWithoutSchedule === 0}
+            okLabel="Todas as abas têm Ocorrência de Atualização (intervalo esperado) configurada"
+            pendingLabel={`${checklist.sheetsWithoutSchedule} aba(s) sem intervalo esperado configurado`}
+            severity="info"
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">

@@ -20,7 +20,7 @@ export async function listProjects(session: Session) {
 export async function getProjectById(session: Session, projectId: string) {
   await assertProjectAccess(session, projectId);
 
-  return prisma.project.findFirst({
+  const project = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
     include: {
       spreadsheets: {
@@ -31,7 +31,10 @@ export async function getProjectById(session: Session, projectId: string) {
           sheets: {
             where: { deletedAt: null },
             orderBy: { name: "asc" },
-            include: { responsible: true },
+            // Relação em Sheet chama-se `schedules` (array) mesmo cada aba
+            // tendo no máximo um Schedule (@@unique([sheetId])) — ver
+            // spreadsheet.service.ts para o mesmo padrão de normalização.
+            include: { responsible: true, schedules: true },
           },
         },
       },
@@ -42,6 +45,18 @@ export async function getProjectById(session: Session, projectId: string) {
       },
     },
   });
+  if (!project) return null;
+
+  return {
+    ...project,
+    spreadsheets: project.spreadsheets.map((spreadsheet) => ({
+      ...spreadsheet,
+      sheets: spreadsheet.sheets.map(({ schedules, ...sheet }) => ({
+        ...sheet,
+        schedule: schedules[0] ?? null,
+      })),
+    })),
+  };
 }
 
 export async function createProject(input: CreateProjectInput) {
