@@ -34,7 +34,12 @@ export async function getProjectById(session: Session, projectId: string) {
             // Relação em Sheet chama-se `schedules` (array) mesmo cada aba
             // tendo no máximo um Schedule (@@unique([sheetId])) — ver
             // spreadsheet.service.ts para o mesmo padrão de normalização.
-            include: { responsible: true, schedules: true },
+            // Mesma lógica pra `responsibles` (SheetResponsible[] com o
+            // Responsible aninhado), achatado pra lista de Responsible.
+            include: {
+              responsibles: { include: { responsible: true } },
+              schedules: true,
+            },
           },
         },
       },
@@ -51,9 +56,10 @@ export async function getProjectById(session: Session, projectId: string) {
     ...project,
     spreadsheets: project.spreadsheets.map((spreadsheet) => ({
       ...spreadsheet,
-      sheets: spreadsheet.sheets.map(({ schedules, ...sheet }) => ({
+      sheets: spreadsheet.sheets.map(({ schedules, responsibles, ...sheet }) => ({
         ...sheet,
         schedule: schedules[0] ?? null,
+        responsibles: responsibles.map((link) => link.responsible),
       })),
     })),
   };

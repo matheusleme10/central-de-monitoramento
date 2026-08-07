@@ -26,8 +26,15 @@ export default async function PlanilhaDetailPage({ params }: PageProps) {
     session.user.permissions.includes(PERMISSIONS.SHEET_WRITE);
 
   const latestEvents = await getLatestEventPerSheet(spreadsheet.sheets.map((s: { id: string }) => s.id));
-  const latestStatusBySheet = Object.fromEntries(
-    Array.from(latestEvents.entries()).map(([sheetId, event]) => [sheetId, event.status]),
+  const latestEventBySheet = Object.fromEntries(
+    Array.from(latestEvents.entries()).map(([sheetId, event]) => [
+      sheetId,
+      {
+        status: event.status as string,
+        startedAt: event.startedAt as Date,
+        rowsProcessed: event.rowsProcessed as number | null,
+      },
+    ]),
   );
 
   return (
@@ -35,7 +42,7 @@ export default async function PlanilhaDetailPage({ params }: PageProps) {
       spreadsheet={spreadsheet}
       projectId={projectId}
       canWrite={canWrite}
-      latestStatusBySheet={latestStatusBySheet}
+      latestEventBySheet={latestEventBySheet}
     />
   );
 }

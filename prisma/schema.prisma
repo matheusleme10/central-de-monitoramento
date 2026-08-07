@@ -234,14 +234,13 @@ model Sheet {
   name          String
   friendlyName  String?   @map("friendly_name")
   description   String?   @db.Text // O que esta aba contém (tipo "Datalake" — dicionário de dados)
-  responsibleId String?   @map("responsible_id") @db.Uuid
   url           String
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
   spreadsheet   Spreadsheet   @relation(fields: [spreadsheetId], references: [id], onDelete: Cascade)
-  responsible   Responsible?  @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
+  responsibles  SheetResponsible[]
   updateEvents  UpdateEvent[]
   schedules     Schedule[]
   alerts        Alert[]
@@ -249,12 +248,11 @@ model Sheet {
 
   @@unique([spreadsheetId, gid])
   @@index([deletedAt])
-  @@index([responsibleId])
   @@map("sheets")
 }
 
-/// Pessoa responsável por uma aba — só um contato (nome + e-mail), sem
-/// login/permissões no painel. Reaproveitado entre abas pelo e-mail (ver
+/// Pessoa responsável por uma ou mais abas — só um contato (nome + e-mail),
+/// sem login/permissões no painel. Reaproveitado entre abas pelo e-mail (ver
 /// `findOrCreateResponsible`), então cadastrar "a mesma pessoa" em abas
 /// diferentes não duplica o registro.
 model Responsible {
@@ -263,9 +261,26 @@ model Responsible {
   email     String   @unique
   createdAt DateTime @default(now()) @map("created_at")
 
-  sheets    Sheet[]
+  sheetLinks SheetResponsible[]
 
   @@map("responsibles")
+}
+
+/// Tabela de junção — uma aba pode ter vários responsáveis, e uma pessoa
+/// pode ser responsável por várias abas (substituiu o antigo
+/// `Sheet.responsibleId` 1:1, que só permitia 1 pessoa por aba).
+model SheetResponsible {
+  id            String   @id @default(uuid()) @db.Uuid
+  sheetId       String   @map("sheet_id") @db.Uuid
+  responsibleId String   @map("responsible_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sheet       Sheet       @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  responsible Responsible @relation(fields: [responsibleId], references: [id], onDelete: Cascade)
+
+  @@unique([sheetId, responsibleId])
+  @@index([responsibleId])
+  @@map("sheet_responsibles")
 }
 
 enum UpdateStatus {

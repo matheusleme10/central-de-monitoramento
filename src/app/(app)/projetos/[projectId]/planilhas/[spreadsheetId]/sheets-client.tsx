@@ -16,13 +16,21 @@ import {
   Pencil,
   Plus,
   Trash2,
+  X,
+  Sheet as SheetIcon,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, formatResponsibleList } from "@/lib/utils";
+import { formatToAppTimeZone } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { StatusBadge } from "@/components/monitoring/status-badge";
+import { MetricCard } from "@/components/monitoring/metric-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,13 +111,21 @@ function intervalLabel(minutes: number | null | undefined): string {
   return Number.isInteger(days) ? `A cada ${days} dias` : `A cada ${Math.round(minutes / 60)}h`;
 }
 
+interface ResponsibleEntry {
+  key: string;
+  name: string;
+  email: string;
+}
+
+function newResponsibleEntry(): ResponsibleEntry {
+  return { key: crypto.randomUUID(), name: "", email: "" };
+}
+
 const sheetSchema = z.object({
   gid: z.string().trim().min(1, "GID é obrigatório"),
   name: z.string().trim().min(1, "Nome é obrigatório").max(200),
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
-  responsibleName: z.string().trim().max(200).optional().or(z.literal("")),
-  responsibleEmail: z.string().trim().email("E-mail inválido").optional().or(z.literal("")),
   url: z.string().trim().url("Informe a URL direta da aba"),
 });
 type SheetFormValues = z.infer<typeof sheetSchema>;
@@ -117,14 +133,18 @@ type SheetFormValues = z.infer<typeof sheetSchema>;
 const editSheetSchema = z.object({
   friendlyName: z.string().trim().max(200).optional().or(z.literal("")),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
-  responsibleName: z.string().trim().max(200).optional().or(z.literal("")),
-  responsibleEmail: z.string().trim().email("E-mail inválido").optional().or(z.literal("")),
 });
 type EditSheetFormValues = z.infer<typeof editSheetSchema>;
 
 interface ScheduleData {
   expectedInterval: number | null;
   isActive: boolean;
+}
+
+interface ResponsibleRef {
+  id: string;
+  name: string;
+  email: string;
 }
 
 interface SheetRow {
@@ -134,7 +154,7 @@ interface SheetRow {
   friendlyName: string | null;
   description: string | null;
   url: string;
-  responsible: { id: string; name: string; email: string } | null;
+  responsibles: ResponsibleRef[];
   schedule: ScheduleData | null;
 }
 
@@ -148,16 +168,92 @@ interface SpreadsheetData {
   sheets: SheetRow[];
 }
 
+interface LatestEventInfo {
+  status: string;
+  startedAt: string | Date;
+  rowsProcessed: number | null;
+}
+
+// Filtra entradas vazias (usuário adicionou a linha e não preencheu) antes
+// de mandar pro servidor — evita erro de validação bobo por linha em branco.
+function cleanResponsibles(entries: ResponsibleEntry[]) {
+  return entries
+    .filter((e) => e.name.trim() || e.email.trim())
+    .map((e) => ({ name: e.name.trim(), email: e.email.trim() }));
+}
+
+function ResponsiblesEditor({
+  value,
+  onChange,
+}: {
+  value: ResponsibleEntry[];
+  onChange: (next: ResponsibleEntry[]) => void;
+}) {
+  function updateEntry(key: string, patch: Partial<ResponsibleEntry>) {
+    onChange(value.map((entry) => (entry.key === key ? { ...entry, ...patch } : entry)));
+  }
+  function removeEntry(key: string) {
+    onChange(value.filter((entry) => entry.key !== key));
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Responsáveis</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => onChange([...value, newResponsibleEntry()])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Adicionar
+        </Button>
+      </div>
+      {value.length === 0 && (
+        <p className="text-xs text-muted-foreground">Nenhum responsável adicionado.</p>
+      )}
+      <div className="space-y-2">
+        {value.map((entry) => (
+          <div key={entry.key} className="flex gap-2">
+            <Input
+              placeholder="Nome"
+              value={entry.name}
+              onChange={(e) => updateEntry(entry.key, { name: e.target.value })}
+            />
+            <Input
+              placeholder="email@empresa.com"
+              value={entry.email}
+              onChange={(e) => updateEntry(entry.key, { email: e.target.value })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              onClick={() => removeEntry(entry.key)}
+              aria-label="Remover responsável"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function SheetsClient({
   spreadsheet,
   projectId,
   canWrite,
-  latestStatusBySheet,
+  latestEventBySheet,
 }: {
   spreadsheet: SpreadsheetData;
   projectId: string;
   canWrite: boolean;
-  latestStatusBySheet: Record<string, string>;
+  latestEventBySheet: Record<string, LatestEventInfo>;
 }) {
   const router = useRouter();
   const [sheets, setSheets] = useState(spreadsheet.sheets);
@@ -165,6 +261,7 @@ export function SheetsClient({
   const [editing, setEditing] = useState<SheetRow | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [createResponsibles, setCreateResponsibles] = useState<ResponsibleEntry[]>([]);
 
   const sortedSheets = [...sheets].sort((a, b) => {
     const nameA = (a.friendlyName || a.name).toLowerCase();
@@ -181,6 +278,27 @@ export function SheetsClient({
     });
   }
 
+  const metrics = sheets.reduce(
+    (acc, sheet) => {
+      const event = latestEventBySheet[sheet.id];
+      if (!event) acc.neverUpdated += 1;
+      else if (event.status === "ERROR") acc.withError += 1;
+
+      const expected = sheet.schedule?.isActive ? sheet.schedule.expectedInterval : null;
+      if (expected) {
+        if (!event) {
+          acc.overdue += 1;
+        } else {
+          const ageMinutes = (Date.now() - new Date(event.startedAt).getTime()) / 60000;
+          if (ageMinutes > expected) acc.overdue += 1;
+          else acc.onTime += 1;
+        }
+      }
+      return acc;
+    },
+    { neverUpdated: 0, withError: 0, overdue: 0, onTime: 0 },
+  );
+
   const {
     register,
     handleSubmit,
@@ -192,7 +310,7 @@ export function SheetsClient({
     const response = await fetch(`/api/v1/spreadsheets/${spreadsheet.id}/sheets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
+      body: JSON.stringify({ ...values, responsibles: cleanResponsibles(createResponsibles) }),
     });
     const body = await response.json();
     if (!response.ok) {
@@ -203,6 +321,7 @@ export function SheetsClient({
     toast.success("Aba cadastrada");
     setIsCreateOpen(false);
     reset();
+    setCreateResponsibles([]);
     router.refresh();
   }
 
@@ -241,6 +360,14 @@ export function SheetsClient({
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <MetricCard icon={SheetIcon} label="Total de abas" value={sheets.length} />
+        <MetricCard icon={CheckCircle2} label="Dentro do prazo" value={metrics.onTime} tone="success" />
+        <MetricCard icon={Clock} label="Atrasadas" value={metrics.overdue} tone="warning" />
+        <MetricCard icon={AlertTriangle} label="Nunca atualizadas" value={metrics.neverUpdated} tone="warning" />
+        <MetricCard icon={XCircle} label="Com erro" value={metrics.withError} tone="destructive" />
+      </div>
+
       <Card className="glow-card">
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
@@ -248,14 +375,20 @@ export function SheetsClient({
             <CardDescription>Abas monitoradas dentro desta planilha</CardDescription>
           </div>
           {canWrite && (
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <Dialog
+              open={isCreateOpen}
+              onOpenChange={(open) => {
+                setIsCreateOpen(open);
+                if (!open) setCreateResponsibles([]);
+              }}
+            >
               <DialogTrigger asChild>
                 <Button size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   Nova aba
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Nova aba</DialogTitle>
                 </DialogHeader>
@@ -283,19 +416,7 @@ export function SheetsClient({
                     <Input id="gid" placeholder="0" {...register("gid")} />
                     {errors.gid && <p className="text-xs text-destructive">{errors.gid.message}</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="responsibleName">Responsável (nome)</Label>
-                      <Input id="responsibleName" placeholder="Bruna Alves" {...register("responsibleName")} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="responsibleEmail">Responsável (e-mail)</Label>
-                      <Input id="responsibleEmail" placeholder="bruna@empresa.com" {...register("responsibleEmail")} />
-                      {errors.responsibleEmail && (
-                        <p className="text-xs text-destructive">{errors.responsibleEmail.message}</p>
-                      )}
-                    </div>
-                  </div>
+                  <ResponsiblesEditor value={createResponsibles} onChange={setCreateResponsibles} />
                   <div className="space-y-2">
                     <Label htmlFor="url">URL direta da aba</Label>
                     <Input
@@ -338,6 +459,7 @@ export function SheetsClient({
                   <TableHead>GID</TableHead>
                   <TableHead>Responsável</TableHead>
                   <TableHead>Ocorrência</TableHead>
+                  <TableHead>Atualização</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -346,6 +468,7 @@ export function SheetsClient({
                 {sortedSheets.map((sheet) => {
                   const isExpanded = expandedIds.has(sheet.id);
                   const canExpand = (sheet.description?.length ?? 0) > 80;
+                  const event = latestEventBySheet[sheet.id];
                   return (
                     <TableRow key={sheet.id} className="transition-colors hover:bg-muted/40">
                       <TableCell className="font-medium">
@@ -383,14 +506,12 @@ export function SheetsClient({
                       </TableCell>
                       <TableCell className="text-muted-foreground">{sheet.gid}</TableCell>
                       <TableCell>
-                        {sheet.responsible ? (
-                          <div>
-                            <p className="text-sm">{sheet.responsible.name}</p>
-                            <p className="text-xs text-muted-foreground">{sheet.responsible.email}</p>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
+                        <span
+                          className="text-sm"
+                          title={sheet.responsibles.map((r) => `${r.name} <${r.email}>`).join(", ")}
+                        >
+                          {formatResponsibleList(sheet.responsibles)}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -400,8 +521,11 @@ export function SheetsClient({
                           {intervalLabel(sheet.schedule?.expectedInterval)}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {event ? formatToAppTimeZone(event.startedAt, "dd/MM/yyyy HH:mm") : "—"}
+                      </TableCell>
                       <TableCell>
-                        <StatusBadge status={latestStatusBySheet[sheet.id]} />
+                        <StatusBadge status={event?.status} />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -490,6 +614,9 @@ function EditSheetDialogContent({
       : "",
   );
   const [scheduleActive, setScheduleActive] = useState(sheet.schedule?.isActive ?? true);
+  const [responsibles, setResponsibles] = useState<ResponsibleEntry[]>(
+    sheet.responsibles.map((r) => ({ key: crypto.randomUUID(), name: r.name, email: r.email })),
+  );
 
   const {
     register,
@@ -500,8 +627,6 @@ function EditSheetDialogContent({
     defaultValues: {
       friendlyName: sheet.friendlyName ?? "",
       description: sheet.description ?? "",
-      responsibleName: sheet.responsible?.name ?? "",
-      responsibleEmail: sheet.responsible?.email ?? "",
     },
   });
 
@@ -510,7 +635,7 @@ function EditSheetDialogContent({
       fetch(`/api/v1/sheets/${sheet.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, responsibles: cleanResponsibles(responsibles) }),
       }),
       fetch(`/api/v1/sheets/${sheet.id}/schedule`, {
         method: "PATCH",
@@ -539,7 +664,7 @@ function EditSheetDialogContent({
   }
 
   return (
-    <DialogContent>
+    <DialogContent className="max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Editar aba</DialogTitle>
       </DialogHeader>
@@ -557,16 +682,8 @@ function EditSheetDialogContent({
             {...register("description")}
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-2">
-            <Label htmlFor="edit-responsibleName">Responsável (nome)</Label>
-            <Input id="edit-responsibleName" placeholder="Bruna Alves" {...register("responsibleName")} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-responsibleEmail">Responsável (e-mail)</Label>
-            <Input id="edit-responsibleEmail" placeholder="bruna@empresa.com" {...register("responsibleEmail")} />
-          </div>
-        </div>
+
+        <ResponsiblesEditor value={responsibles} onChange={setResponsibles} />
 
         <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
           <div className="flex items-center justify-between">

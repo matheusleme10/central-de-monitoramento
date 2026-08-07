@@ -70,7 +70,7 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatToAppTimeZone } from "@/lib/timezone";
-import { cn } from "@/lib/utils";
+import { cn, formatResponsibleList } from "@/lib/utils";
 import { ApiTokensSection } from "./api-tokens-section";
 import { ObsidianLinksSection } from "./obsidian-links-section";
 
@@ -94,7 +94,7 @@ interface SheetSummary {
   friendlyName: string | null;
   description: string | null;
   url: string;
-  responsible: { id: string; name: string; email: string } | null;
+  responsibles: { id: string; name: string; email: string }[];
   schedule: { expectedInterval: number | null; isActive: boolean } | null;
 }
 
@@ -215,7 +215,7 @@ function buildConfigChecklist(
     totalTokens: apiTokens.length,
     totalSheets: allSheets.length,
     sheetsNeverUpdated: allSheets.filter((s) => !latestEventBySheet[s.id]),
-    sheetsWithoutResponsible: allSheetRows.filter((s) => !s.responsible).length,
+    sheetsWithoutResponsible: allSheetRows.filter((s) => s.responsibles.length === 0).length,
     sheetsWithoutSchedule: allSheetRows.filter((s) => !s.schedule?.expectedInterval).length,
   };
 }
@@ -629,8 +629,11 @@ export function ProjectDetailClient({
                                     </p>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {sheet.responsible ? sheet.responsible.name : "—"}
+                                <TableCell
+                                  className="text-sm text-muted-foreground"
+                                  title={sheet.responsibles.map((r) => `${r.name} <${r.email}>`).join(", ")}
+                                >
+                                  {formatResponsibleList(sheet.responsibles)}
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">
                                   {event?.rowsProcessed ?? "—"}

@@ -37,8 +37,12 @@ export async function getSpreadsheetById(spreadsheetId: string) {
         // A relação em Sheet chama-se `schedules` (array) mesmo a aba tendo
         // no máximo um Schedule (garantido por @@unique([sheetId])) — por
         // isso normalizamos pra `schedule` (singular) abaixo, no formato que
-        // o front-end espera.
-        include: { responsible: true, schedules: true },
+        // o front-end espera. Mesma lógica pra `responsibles` (SheetResponsible[]
+        // com o Responsible aninhado) — achatado pra lista de Responsible.
+        include: {
+          responsibles: { include: { responsible: true } },
+          schedules: true,
+        },
       },
     },
   });
@@ -46,9 +50,10 @@ export async function getSpreadsheetById(spreadsheetId: string) {
 
   return {
     ...spreadsheet,
-    sheets: spreadsheet.sheets.map(({ schedules, ...sheet }) => ({
+    sheets: spreadsheet.sheets.map(({ schedules, responsibles, ...sheet }) => ({
       ...sheet,
       schedule: schedules[0] ?? null,
+      responsibles: responsibles.map((link) => link.responsible),
     })),
   };
 }

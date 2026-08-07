@@ -7,8 +7,19 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { FolderKanban, Plus, Trash2, Pencil, Loader2 } from "lucide-react";
+import {
+  FolderKanban,
+  Plus,
+  Trash2,
+  Pencil,
+  Loader2,
+  Sheet as SheetIcon,
+  Clock,
+  AlertTriangle,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/monitoring/metric-card";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,14 +82,24 @@ interface ProjectRow {
   _count: { spreadsheets: number; members: number };
 }
 
+interface Indicators {
+  spreadsheetsCount: number;
+  sheetsCount: number;
+  updatesOverdue: number;
+  updatesError: number;
+  neverUpdated: number;
+}
+
 export function ProjectsClient({
   initialProjects,
   canWrite,
   canDelete,
+  indicators,
 }: {
   initialProjects: ProjectRow[];
   canWrite: boolean;
   canDelete: boolean;
+  indicators: Indicators;
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
@@ -128,6 +149,14 @@ export function ProjectsClient({
             />
           </Dialog>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <MetricCard icon={FolderKanban} label="Projetos" value={projects.length} />
+        <MetricCard icon={SheetIcon} label="Abas monitoradas" value={indicators.sheetsCount} />
+        <MetricCard icon={Clock} label="Atrasadas" value={indicators.updatesOverdue} tone="warning" />
+        <MetricCard icon={AlertTriangle} label="Nunca atualizadas" value={indicators.neverUpdated} tone="warning" />
+        <MetricCard icon={XCircle} label="Com erro" value={indicators.updatesError} tone="destructive" />
       </div>
 
       {projects.length === 0 ? (
