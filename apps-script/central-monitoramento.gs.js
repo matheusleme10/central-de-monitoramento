@@ -34,12 +34,19 @@
  */
 
 var CentralMonitoramento = (function () {
+  // trim_ evita erro bobo de "espaço a mais" ao colar valores nas
+  // Propriedades do Script (ex.: CMA_PROJECT_ID com espaço/quebra de linha
+  // no fim reprova a validação de UUID no painel).
+  function trim_(value) {
+    return typeof value === "string" ? value.trim() : value;
+  }
+
   function config_() {
     var p = PropertiesService.getScriptProperties();
     return {
-      panelUrl: p.getProperty("CMA_PANEL_URL"),
-      apiToken: p.getProperty("CMA_API_TOKEN"),
-      projectId: p.getProperty("CMA_PROJECT_ID"),
+      panelUrl: trim_(p.getProperty("CMA_PANEL_URL")),
+      apiToken: trim_(p.getProperty("CMA_API_TOKEN")),
+      projectId: trim_(p.getProperty("CMA_PROJECT_ID")),
     };
   }
 

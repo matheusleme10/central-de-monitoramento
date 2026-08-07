@@ -6,7 +6,10 @@ import { z } from "zod";
  * equivalente ao `gid` usado nas URLs — mapeado para `Sheet.gid` no banco.
  */
 export const recordUpdateEventSchema = z.object({
-  projectId: z.string().uuid(),
+  // .trim() aqui é de propósito: é comum colar o UUID nas Propriedades do
+  // Script do Apps Script com um espaço/quebra de linha a mais, e isso
+  // sozinho já reprova a checagem de formato UUID abaixo.
+  projectId: z.string().trim().uuid(),
   spreadsheetId: z.string().trim().min(1),
   spreadsheetName: z.string().trim().min(1).max(200),
   sheetId: z.union([z.string(), z.number()]).transform((v) => String(v)),
