@@ -127,7 +127,27 @@ var CentralMonitoramento = (function () {
     return results;
   }
 
-  var DATE_HEADERS_ = ["data", "date", "atualizado em", "ultima atualizacao", "última atualização"];
+  var DATE_HEADERS_ = [
+    "data",
+    "date",
+    "atualizado em",
+    "atualizado_em",
+    "ultima atualizacao",
+    "última atualização",
+  ];
+
+  // Aceita tanto célula já vindo como Date (planilha editada/preenchida com
+  // USER_ENTERED) quanto texto de data (comum quando o pipeline escreve via
+  // API com value_input_option=RAW, ex.: gspread — a célula chega como
+  // string tipo "2026-08-06T20:56:00", não como Date nativo do Sheets).
+  function toDate_(value) {
+    if (value instanceof Date) return value;
+    if (typeof value === "string" && value.trim()) {
+      var parsed = new Date(value.trim());
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+  }
 
   function detectLastUpdate_(sheet, spreadsheet, dateColumn) {
     var values = sheet.getDataRange().getValues();
@@ -144,8 +164,8 @@ var CentralMonitoramento = (function () {
       if (col >= 0) {
         var maxDate = null;
         for (var i = 1; i < lastRow; i++) {
-          var cell = values[i][col];
-          if (cell instanceof Date && (!maxDate || cell > maxDate)) maxDate = cell;
+          var cell = toDate_(values[i][col]);
+          if (cell && (!maxDate || cell > maxDate)) maxDate = cell;
         }
         if (maxDate) {
           return {
